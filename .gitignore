@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# WhatsApp
+.wwebjs_cache/
+data/session/
+data/*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archivos de prueba
+detalle.txt
+detalle_test.txt
+resultado.txt
+resumen_test.txt
+test_bot.py
+
+# Oracle
+*.dmp
+*.exp
