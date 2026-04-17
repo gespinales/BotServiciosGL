@@ -1,5 +1,6 @@
 from typing import Optional
 import oracledb
+import sys
 from config.settings import config
 from src.models.schemas import QueryResult
 

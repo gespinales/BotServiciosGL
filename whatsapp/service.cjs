@@ -50,13 +50,20 @@ class WhatsAppService {
 
         console.log(`Mensaje de ${from}: ${text}`);
 
-        const estado = this.userState[from] || {};
-
-        // Verificar si es el primer mensaje del usuario (sin estado)
-        const esNuevoUsuario = !this.userState[from] && (!estado.departamento && !estado.entidad && !estado.tipoBusqueda);
+        // Verificar si es el primer mensaje del usuario
+        const estado = this.userState[from];
         
-        if (esNuevoUsuario) {
+        // Si no hay estado, es el primer mensaje -> dar bienvenida
+        if (!estado) {
+            this.userState[from] = { primer_mensaje: true };
             await this.enviarBienvenida(msg);
+            return;
+        }
+        
+        // Si hay estado pero solo primer_mensaje, es el segundo mensaje -> departamentos
+        if (estado.primer_mensaje) {
+            delete this.userState[from];
+            await this.enviarDepartamentos(msg);
             return;
         }
 
@@ -229,7 +236,22 @@ class WhatsAppService {
         // Manejar selección de tarjeta para detalle
         if (estado.solicitandoDetalleTarjeta) {
             if (text === 'T') {
-                // Ver todas
+                // Ver todas las tarjetas del catastro
+                delete this.userState[from].solicitandoDetalleTarjeta;
+                // Mantener los datos necesarios para el detalle
+                this.userState[from] = {
+                    departamento: estado.departamento,
+                    deptoNombre: estado.deptoNombre,
+                    entidad: estado.entidad,
+                    entidadId: estado.entidadId,
+                    entidadNombre: estado.entidadNombre,
+                    tipoBusqueda: estado.tipoBusqueda,
+                    identificador: estado.identificador,
+                    queryName: estado.queryName,
+                    queryDetalle: estado.queryDetalle,
+                    queryResumen: estado.queryResumen,
+                    tarjetasCatastro: estado.tarjetasCatastro
+                };
                 await this.runDetalle(msg, from);
             } else {
                 const num = parseInt(text);
@@ -237,8 +259,10 @@ class WhatsAppService {
                     await msg.reply('Numero no valido. Selecciona la tarjeta:');
                     return;
                 }
+                // Guardar la tarjeta seleccionada y cambiar el tipo para el detalle
                 this.userState[from].tarjetaDetalleSeleccionada = estado.tarjetasCatastro[num - 1].ID_TARJETA;
                 this.userState[from].tarjetaNombre = estado.tarjetasCatastro[num - 1].NOMBRE;
+                this.userState[from].tipoBusqueda = 'TARJETA_CATASTRO';
                 delete this.userState[from].solicitandoDetalleTarjeta;
                 await this.runDetalleTarjeta(msg, from);
             }
@@ -552,11 +576,28 @@ X. Salir`;
         const estado = this.userState[from];
         
         try {
-            const params = this.getQueryParams(estado);
-            
+            let params;
             let queryId = estado.queryDetalle;
-            if (estado.tipoBusqueda === 'TARJETA' && !queryId.endsWith('_tarjeta')) {
-                queryId = queryId + '_tarjeta';
+            
+            // Si es CATASTRO y选择了 "T" (ver todas), usar query de detalle por catastro
+            if (estado.tipoBusqueda === 'CATASTRO' && !estado.tarjetaDetalleSeleccionada) {
+                params = {
+                    identificador: estado.identificador,
+                    id_entidad: estado.entidadId
+                };
+                queryId = 'cta_pendiente_detalle';
+            } else if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                // Detail specific
+                params = {
+                    id_tarjeta: estado.tarjetaDetalleSeleccionada,
+                    id_entidad: estado.entidadId
+                };
+                queryId = 'cta_pendiente_detalle_tarjeta';
+            } else {
+                params = this.getQueryParams(estado);
+                if (estado.tipoBusqueda === 'TARJETA' && !queryId.endsWith('_tarjeta')) {
+                    queryId = queryId + '_tarjeta';
+                }
             }
             
             const respuesta = await this.ejecutarPython(queryId, params);
