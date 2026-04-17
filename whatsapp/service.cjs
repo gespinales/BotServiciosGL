@@ -190,7 +190,7 @@ class WhatsAppService {
         }
 
         if (!estado.queryType) {
-            if (['1', '2', '3', '4', '5'].includes(text)) {
+            if (['1'].includes(text)) {
                 const opciones = this.getOpcionesConsulta(estado.tipoBusqueda, estado.catastroSeleccionado);
                 const opcion = opciones[text];
                 
@@ -202,34 +202,7 @@ class WhatsAppService {
                 return;
             }
             
-            if (['6', '7'].includes(text)) {
-                const opcionesTotal = this.getOpcionesTotales(estado.tipoBusqueda);
-                const opcion = opcionesTotal[text];
-                
-                this.userState[from].queryType = opcion.query;
-                this.userState[from].queryName = opcion.nombre;
-                this.userState[from].mostrarDetalle = false;
-                
-                await this.runQuery(msg, from);
-                return;
-            }
-            
             await msg.reply('Opcion no valida.\nEscribe 0 para reiniciar.');
-            return;
-        }
-
-        if (estado.queryType === 'RESUMEN_MOSTRADO') {
-            if (text === 'S' || text === 'SI') {
-                // Verificar si hay tarjetas para elegir
-                if (estado.tarjetasCatastro && estado.tarjetasCatastro.length > 0) {
-                    await this.pedirSeleccionTarjetaDetalle(msg, from);
-                } else {
-                    await this.runDetalle(msg, from);
-                }
-            } else {
-                delete this.userState[from];
-                await msg.reply('OK. Puedes iniciar una nueva consulta con 0');
-            }
             return;
         }
 
@@ -274,11 +247,11 @@ class WhatsAppService {
 
     getOpcionesConsulta(tipo, catastro) {
         const base = {
-            '1': { sufijos: ['pendiente', 'vencida', 'pagadas', 'multas', 'all'], nombre: ['Cuentas Pendientes', 'Cuentas Vencidas', 'Cuentas Pagadas', 'Cuentas con Multa', 'Todas las Cuentas'] },
+            '1': { sufijos: ['pendiente'], nombre: ['Cuentas Pendientes'] },
         };
         
         const result = {};
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 1; i++) {
             let resumen, detalle;
             
             if (tipo === 'CONTRIBUYENTE') {
@@ -301,12 +274,7 @@ class WhatsAppService {
     }
 
     getOpcionesTotales(tipo) {
-        const query = tipo === 'CONTRIBUYENTE' ? 'total_adeudo_contribuyente' : 
-                      tipo === 'CATASTRO' ? 'total_adeudo_catastro' : 'total_adeudo_tarjeta';
-        return {
-            '6': { query, nombre: 'Total de Adeudo' },
-            '7': { query: `resumen_${tipo.toLowerCase()}`, nombre: 'Resumen' }
-        };
+        return {};
     }
 
     async enviarDepartamentos(msg) {
@@ -352,10 +320,6 @@ Soy el asistente de consultas de Cuenta Corriente.
 
 Puedo ayudarte a consultar:
 - Cuentas pendientes
-- Cuentas vencidas
-- Cuentas pagadas
-- Cuentas con multa
-- Resumen de adeudos
 
 Para comenzar, escribe cualquier texto o numero para iniciar la consulta.
 
@@ -480,12 +444,6 @@ ID: ${idLabel}
 
 Paso 4: Selecciona la consulta:
 1. Cuentas Pendientes
-2. Cuentas Vencidas
-3. Cuentas Pagadas
-4. Cuentas con Multa
-5. Todas las Cuentas
-6. Total de Adeudo
-7. Resumen
 
 0. Reiniciar
 X. Salir`;
@@ -496,7 +454,7 @@ X. Salir`;
     async pedirSeleccionTarjetaDetalle(msg, from) {
         const estado = this.userState[from];
         
-        let mensaje = `Sobre que TARJETA deseas ver el detalle?\n\n`;
+        let mensaje = `Deseas ver el DETALLE?\n\n`;
         estado.tarjetasCatastro.forEach((t, i) => {
             mensaje += `${i + 1}. ${t.ID_TARJETA} - ${t.NOMBRE}\n`;
         });
@@ -562,8 +520,11 @@ X. Salir`;
                 await msg.reply(header + respuesta);
                 delete this.userState[from];
             } else {
-                await msg.reply(header + respuesta + '\n\nDeseas ver el detalle? (S/N)');
-                this.userState[from].queryType = 'RESUMEN_MOSTRADO';
+                if (estado.tarjetasCatastro && estado.tarjetasCatastro.length > 0) {
+                    await this.pedirSeleccionTarjetaDetalle(msg, from);
+                } else {
+                    await this.runDetalle(msg, from);
+                }
             }
         } catch (error) {
             console.error('Error:', error);
