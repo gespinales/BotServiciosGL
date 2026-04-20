@@ -416,7 +416,8 @@ class SimuladorBot:
         
         for i, t in enumerate(self.tarjetas, 1):
             catastro = t.get('CATASTRO', self.estado.get('identificador'))
-            print(f"{i}. {t.get('NOMBRE', 'N/A')} - {catastro}")
+            nombre = f"{t.get('APELLIDO_PATERNO', '')} {t.get('NOMBRE', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
+            print(f"{i}. {nombre} - {catastro}")
         
         print()
         print("T. Ver todas las tarjetas")
