@@ -430,13 +430,15 @@ class SimuladorBot:
         while True:
             self.paso_bienvenida()
             
-            if self.paso_departamentos() is None:
+            depto_idx = self.paso_departamentos()
+            if depto_idx is None:
                 break
             
-            if self.paso_entidades(1) is None:
+            entidad_idx = self.paso_entidades(depto_idx)
+            if entidad_idx is None:
                 continue
             
-            tipo_idx = self.paso_tipo_busqueda(1)
+            tipo_idx = self.paso_tipo_busqueda(entidad_idx)
             if tipo_idx is None:
                 continue
             
