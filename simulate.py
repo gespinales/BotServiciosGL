@@ -341,10 +341,19 @@ class SimuladorBot:
         if result.success:
             header = "Cuentas Pendientes\n"
             header += f"Depto: {self.estado.get('deptoNombre')} | Entidad: {self.estado.get('entidadNombre')}\n"
-            header += f"Tipo: {self.estado.get('tipoBusqueda')}"
-            if self.estado.get('catastroSeleccionado'):
-                header += f" > {self.estado.get('catastroSeleccionado')}"
-            header += f"\nID: {self.estado.get('identificador')}\n"
+            
+            tipo = self.estado.get('tipoBusqueda')
+            if tipo == 'TARJETA':
+                header += f"Tarjeta: {self.estado.get('identificador')}"
+            elif tipo == 'TARJETA_CATASTRO':
+                header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}"
+            elif tipo == 'CONTRIBUYENTE':
+                catastro = self.estado.get('catastroSeleccionado', '')
+                header += f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro}"
+            else:
+                header += f"Tipo: {tipo} - ID: {self.estado.get('identificador')}"
+            
+            header += "\n"
             
             print(header)
             print(result.formatted_output)
