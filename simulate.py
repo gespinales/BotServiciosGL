@@ -420,7 +420,13 @@ class SimuladorBot:
     def ejecutar_detalle(self, tipo_detalle=None):
         tipo = self.estado.get('tipoBusqueda')
         
-        if tipo_detalle == 'T' or tipo == 'CATASTRO':
+        if tipo == 'CONTRIBUYENTE':
+            query_id = 'cta_pendiente_detalle_contribuyente'
+            params = {
+                'dpi': self.estado['identificador'],
+                'id_entidad': self.estado['entidad']
+            }
+        elif tipo_detalle == 'T' or tipo == 'CATASTRO':
             query_id = 'cta_pendiente_detalle'
             params = {
                 'identificador': self.estado['identificador'],
@@ -518,10 +524,9 @@ class SimuladorBot:
                 if respuesta == 'S':
                     self.ejecutar_detalle('T')
             elif tipo == 'CONTRIBUYENTE':
-                input("\n>>> Presiona ENTER para continuar...")
-                opcion = self.pedir_seleccion_detalle()
-                if opcion and opcion != 'REINICIAR':
-                    self.ejecutar_detalle(opcion)
+                respuesta = input("\n>>> Deseas ver el detalle? (S/N): ").strip().upper()
+                if respuesta == 'S':
+                    self.ejecutar_detalle('T')
             
             input("\n>>> Presiona ENTER para nueva consulta...")
             
