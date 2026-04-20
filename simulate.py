@@ -508,8 +508,8 @@ class SimuladorBot:
             tarjeta_sel = self.estado.get('tarjetaSeleccionada', '')
             
             if tipo == 'TARJETA' or tipo == 'CATASTRO' or tipo == 'TARJETA_CATASTRO':
-                respuesta = input("\n>>> Presiona ENTER para ver detalle, o cualquier cosa para omitir...")
-                if respuesta.strip() == '':
+                respuesta = input("\n>>> Deseas ver el detalle? (S/N): ").strip().upper()
+                if respuesta == 'S':
                     self.ejecutar_detalle('T')
             elif tipo == 'CONTRIBUYENTE':
                 input("\n>>> Presiona ENTER para continuar...")
