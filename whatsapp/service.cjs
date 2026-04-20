@@ -4,10 +4,33 @@ const path = require('path');
 const QRCode = require('qrcode');
 
 class WhatsAppService {
+    TIMEOUT_MINUTOS = 5;
+    
     constructor() {
         this.client = null;
         this.ready = false;
         this.userState = {};
+    }
+    
+    verificarTimeout(from) {
+        const estado = this.userState[from];
+        if (!estado || !estado.ultimaActividad) return false;
+        
+        const ahora = Date.now();
+        const diferencia = (ahora - estado.ultimaActividad) / 1000 / 60;
+        
+        if (diferencia >= this.TIMEOUT_MINUTOS) {
+            console.log(`[${new Date().toLocaleTimeString()}] Session expired for ${from}`);
+            delete this.userState[from];
+            return true;
+        }
+        return false;
+    }
+    
+    actualizarActividad(from) {
+        if (this.userState[from]) {
+            this.userState[from].ultimaActividad = Date.now();
+        }
     }
 
     async connect() {
@@ -50,15 +73,26 @@ class WhatsAppService {
 
         console.log(`Mensaje de ${from}: ${text}`);
 
+        // Verificar timeout de sesión
+        if (this.verificarTimeout(from)) {
+            this.userState[from] = { primer_mensaje: true, ultimaActividad: Date.now() };
+            await this.enviarBienvenida(msg);
+            await msg.reply('Tu sesión ha expire y se ha cerrado por inactividad.\n\nPero no te preocupes, podemos comenzar de nuevo! :)');
+            return;
+        }
+        
         // Verificar si es el primer mensaje del usuario
         const estado = this.userState[from];
         
         // Si no hay estado, es el primer mensaje -> dar bienvenida
         if (!estado) {
-            this.userState[from] = { primer_mensaje: true };
+            this.userState[from] = { primer_mensaje: true, ultimaActividad: Date.now() };
             await this.enviarBienvenida(msg);
             return;
         }
+        
+        // Actualizar timestamp de actividad
+        this.actualizarActividad(from);
         
         // Si hay estado pero solo primer_mensaje, es el segundo mensaje -> departamentos
         if (estado.primer_mensaje) {

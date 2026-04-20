@@ -16,6 +16,8 @@ load_queries(json.load(open('config/queries.json', 'r', encoding='utf-8')))
 
 
 class SimuladorBot:
+    TIMEOUT_MINUTOS = 1
+    
     def __init__(self):
         self.estado = {}
         self.departamentos = []
@@ -23,7 +25,27 @@ class SimuladorBot:
         self.tarjetas = []
         self.catastros = []
         self.query_seleccionada = None
+        self.ultima_actividad = datetime.now()
         
+    def verificar_timeout(self):
+        ahora = datetime.now()
+        diferencia = (ahora - self.ultima_actividad).total_seconds() / 60
+        if diferencia >= self.TIMEOUT_MINUTOS:
+            print("\n" + "=" * 60)
+            print("Tu sesión ha expirado por inactividad")
+            print("=" * 60)
+            print()
+            print("He perdido contacto contigo por " + str(self.TIMEOUT_MINUTOS) + " minutos.")
+            print("Vamos a comenzar de nuevo. Hola!")
+            print()
+            self.limpiar_estado()
+            self.ultima_actividad = datetime.now()
+            return True
+        return False
+    
+    def actualizar_timestamp(self):
+        self.ultima_actividad = datetime.now()
+    
     def get_saludo(self):
         ahora = datetime.now()
         hora = ahora.hour
@@ -41,6 +63,7 @@ class SimuladorBot:
         self.tarjetas = []
         self.catastros = []
         self.query_seleccionada = None
+        self.ultima_actividad = datetime.now()
     
     def paso_bienvenida(self):
         print("\n" + "=" * 60)
@@ -62,6 +85,7 @@ class SimuladorBot:
         print()
         
         input(">>> Presiona ENTER para continuar...")
+        self.actualizar_timestamp()
     
     def paso_departamentos(self):
         result = execute_query('departamentos', {})
@@ -139,21 +163,29 @@ class SimuladorBot:
     
     def _obtener_opcion(self, max_opcion, nombre_opcion):
         while True:
+            if self.verificar_timeout():
+                return None
+            
+            opcion = input(f"\n>>> Tu respuesta: ").strip().upper()
+            
+            if self.verificar_timeout():
+                return None
+            
+            self.actualizar_timestamp()
+            
+            if opcion in ['X', 'SALIR']:
+                print("\nHasta luego!")
+                return None
+            
+            if opcion == '0':
+                print("\nReiniciando...")
+                self.limpiar_estado()
+                return 'REINICIAR'
+            
+            if opcion == 'T':
+                return 'T'
+            
             try:
-                opcion = input(f"\n>>> Tu respuesta: ").strip().upper()
-                
-                if opcion in ['X', 'SALIR']:
-                    print("\nHasta luego!")
-                    return None
-                
-                if opcion == '0':
-                    print("\nReiniciando...")
-                    self.limpiar_estado()
-                    return 'REINICIAR'
-                
-                if opcion == 'T':
-                    return 'T'
-                
                 num = int(opcion)
                 if 1 <= num <= max_opcion:
                     return num
@@ -183,6 +215,7 @@ class SimuladorBot:
         print("(Escribe X para reiniciar)")
         
         identificador = input("\n>>> Tu respuesta: ").strip().upper()
+        self.actualizar_timestamp()
         
         if identificador in ['X']:
             print("\nReiniciando...")
@@ -488,11 +521,14 @@ class SimuladorBot:
         print("=" * 60)
         
         while True:
+            if self.verificar_timeout():
+                continue
+            
             self.paso_bienvenida()
             
             depto_idx = self.paso_departamentos()
             if depto_idx is None:
-                break
+                continue
             
             entidad_idx = self.paso_entidades(depto_idx)
             if entidad_idx is None:
@@ -529,14 +565,17 @@ class SimuladorBot:
             
             if tipo == 'TARJETA' or tipo == 'CATASTRO' or tipo == 'TARJETA_CATASTRO':
                 respuesta = input("\n>>> Deseas ver el detalle? (S/N): ").strip().upper()
+                self.actualizar_timestamp()
                 if respuesta == 'S':
                     self.ejecutar_detalle('T')
             elif tipo == 'CONTRIBUYENTE':
                 respuesta = input("\n>>> Deseas ver el detalle? (S/N): ").strip().upper()
+                self.actualizar_timestamp()
                 if respuesta == 'S':
                     self.ejecutar_detalle('T')
             
             input("\n>>> Presiona ENTER para nueva consulta...")
+            self.actualizar_timestamp()
             
             print("\n" + "=" * 60)
             print(">>> Nueva consulta...")
