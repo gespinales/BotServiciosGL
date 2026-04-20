@@ -209,7 +209,7 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
             lineas = []
             total = 0
             for row in data[:15]:
-desc = row.get('DESCRIPCION', '')
+                desc = row.get('DESCRIPCION', '')
                 monto = row.get('MONTO', 0) or 0
                 iva = row.get('MONTO_IVA', 0) or 0
                 total += monto + iva
