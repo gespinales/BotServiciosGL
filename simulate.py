@@ -408,8 +408,7 @@ class SimuladorBot:
         
         if result.success:
             header = f"DETALLE: Cuentas Pendientes\n"
-            iftarjeta_sel != self.estado.get('identificador'):
-                if tarjeta_sel != self.estado.get('identificador'):
+            if tarjeta_sel != self.estado.get('identificador'):
                 header += f"Tarjeta: {tarjeta_sel}"
                 if nombre_sel:
                     header += f" - {nombre_sel}"
