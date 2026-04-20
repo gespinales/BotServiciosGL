@@ -510,6 +510,9 @@ class SimuladorBot:
             if tipo == 'TARJETA':
                 input("\n>>> Presiona ENTER para ver detalle...")
                 self.ejecutar_detalle()
+            elif tipo == 'CATASTRO':
+                input("\n>>> Presiona ENTER para ver detalle...")
+                self.ejecutar_detalle('T')
             elif tipo == 'TARJETA_CATASTRO' and tarjeta_sel == 'TODAS':
                 input("\n>>> Presiona ENTER para ver detalle...")
                 self.ejecutar_detalle('T')
@@ -523,7 +526,7 @@ class SimuladorBot:
                     self.ejecutar_detalle(opcion)
             else:
                 input("\n>>> Presiona ENTER para ver detalle...")
-                self.ejecutar_detalle()
+                self.ejecutar_detalle('T')
             
             input("\n>>> Presiona ENTER para nueva consulta...")
             
