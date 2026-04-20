@@ -350,7 +350,7 @@ class SimuladorBot:
         elif self.estado.get('tipoBusqueda') == 'TARJETA_CATASTRO':
             query_id = 'cta_pendiente_tarjeta'
             params = {
-                'id_tarjeta': self.estado['tarjetaId'],
+                'identificador': self.estado['identificador'],
                 'id_entidad': self.estado['entidad']
             }
         elif self.estado.get('tipoBusqueda') == 'CONTRIBUYENTE':
@@ -441,16 +441,15 @@ class SimuladorBot:
                 'id_entidad': self.estado['entidad']
             }
         elif tipo == 'TARJETA_CATASTRO':
-            tarjeta_id = self.estado.get('tarjetaId')
-            query_id = 'cta_pendiente_detalle_tarjeta'
+            query_id = 'cta_pendiente_detalle'
             params = {
-                'id_tarjeta': tarjeta_id,
+                'identificador': self.estado['identificador'],
                 'id_entidad': self.estado['entidad']
             }
         elif tipo == 'TARJETA' or tipo_detalle == 'TARJETA':
-            query_id = 'cta_pendiente_detalle_tarjeta'
+            query_id = 'cta_pendiente_detalle'
             params = {
-                'id_tarjeta': self.estado['identificador'],
+                'identificador': self.estado['identificador'],
                 'id_entidad': self.estado['entidad']
             }
         else:
