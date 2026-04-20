@@ -411,23 +411,23 @@ class SimuladorBot:
         
         return self._obtener_opcion(len(self.tarjetas), "detalle_tarjeta")
     
-    def ejecutar_detalle(self, opcion_tarjeta=None):
+    def ejecutar_detalle(self, tipo_detalle=None):
         tipo = self.estado.get('tipoBusqueda')
         
-        if opcion_tarjeta == 'T':
+        if tipo_detalle == 'T' or tipo == 'CATASTRO':
             query_id = 'cta_pendiente_detalle'
             params = {
                 'identificador': self.estado['identificador'],
                 'id_entidad': self.estado['entidad']
             }
         elif tipo == 'TARJETA_CATASTRO':
-            tarjeta_id = self.estado.get('tarjetaId', self.estado.get('tarjetaSeleccionada'))
+            tarjeta_id = self.estado.get('tarjetaId')
             query_id = 'cta_pendiente_detalle_tarjeta'
             params = {
                 'id_tarjeta': tarjeta_id,
                 'id_entidad': self.estado['entidad']
             }
-        elif tipo == 'TARJETA':
+        elif tipo == 'TARJETA' or tipo_detalle == 'TARJETA':
             query_id = 'cta_pendiente_detalle_tarjeta'
             params = {
                 'id_tarjeta': self.estado['identificador'],
@@ -509,7 +509,7 @@ class SimuladorBot:
             
             if tipo == 'TARJETA':
                 input("\n>>> Presiona ENTER para ver detalle...")
-                self.ejecutar_detalle()
+                self.ejecutar_detalle('TARJETA')
             elif tipo == 'CATASTRO':
                 input("\n>>> Presiona ENTER para ver detalle...")
                 self.ejecutar_detalle('T')
@@ -518,7 +518,7 @@ class SimuladorBot:
                 self.ejecutar_detalle('T')
             elif tipo == 'TARJETA_CATASTRO':
                 input("\n>>> Presiona ENTER para ver detalle...")
-                self.ejecutar_detalle()
+                self.ejecutar_detalle('TARJETA_CATASTRO')
             elif tipo == 'CONTRIBUYENTE':
                 input("\n>>> Presiona ENTER para continuar...")
                 opcion = self.pedir_seleccion_detalle()
