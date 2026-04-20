@@ -507,10 +507,11 @@ class SimuladorBot:
             tipo = self.estado.get('tipoBusqueda')
             tarjeta_sel = self.estado.get('tarjetaSeleccionada', '')
             
-            if tipo == 'TARJETA':
-                input("\n>>> Presiona ENTER para ver detalle...")
-                self.ejecutar_detalle('TARJETA')
-            elif tipo == 'CATASTRO':
+if tipo == 'TARJETA' or tipo == 'CATASTRO' or tipo == 'TARJETA_CATASTRO':
+                respuesta = input("\n>>> Presiona ENTER para ver detalle, o cualquier cosa para omitir...")
+                if respuesta.strip() == '':
+                    self.ejecutar_detalle('T')
+            elif tipo == 'CONTRIBUYENTE':
                 input("\n>>> Presiona ENTER para ver detalle...")
                 self.ejecutar_detalle('T')
             elif tipo == 'TARJETA_CATASTRO' and tarjeta_sel == 'TODAS':
