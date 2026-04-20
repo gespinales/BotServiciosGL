@@ -162,7 +162,10 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
         tarjetas_data = {}
         for row in data:
             id_tarjeta = row.get('ID_TARJETA', 0)
-            nombre_tarjeta = row.get('NOMBRE_TARJETA', f'Tarjeta {id_tarjeta}')
+            nombre = row.get('NOMBRE', '')
+            ape_pat = row.get('APELLIDO_PATERNO', '')
+            ape_mat = row.get('APELLIDO_MATERNO', '')
+            nombre_tarjeta = f"{ape_pat} {nombre} {ape_mat}".strip() or f"Tarjeta {id_tarjeta}"
             if id_tarjeta not in tarjetas_data:
                 tarjetas_data[id_tarjeta] = {
                     'nombre': nombre_tarjeta,
@@ -348,7 +351,10 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
         tarjetas_data = {}
         for row in data:
             id_tarjeta = row.get('ID_TARJETA', 0)
-            nombre_tarjeta = row.get('NOMBRE_TARJETA', f'Tarjeta {id_tarjeta}')
+            nombre = row.get('NOMBRE', '')
+            ape_pat = row.get('APELLIDO_PATERNO', '')
+            ape_mat = row.get('APELLIDO_MATERNO', '')
+            nombre_tarjeta = f"{ape_pat} {nombre} {ape_mat}".strip() or f"Tarjeta {id_tarjeta}"
             if id_tarjeta not in tarjetas_data:
                 tarjetas_data[id_tarjeta] = {
                     'nombre': nombre_tarjeta,
