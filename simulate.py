@@ -322,7 +322,7 @@ class SimuladorBot:
         if self.estado.get('tipoBusqueda') == 'TARJETA_CATASTRO':
             query_id = 'cta_pendiente_tarjeta'
             params = {
-                'id_tarjeta': self.estado['tarjetaSeleccionada'],
+                'id_tarjeta': self.estado['tarjetaId'],
                 'id_entidad': self.estado['entidad']
             }
         elif self.estado.get('tipoBusqueda') == 'CONTRIBUYENTE':
