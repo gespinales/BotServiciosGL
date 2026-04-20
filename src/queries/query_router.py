@@ -165,7 +165,7 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
             nombre = row.get('NOMBRE', '')
             ape_pat = row.get('APELLIDO_PATERNO', '')
             ape_mat = row.get('APELLIDO_MATERNO', '')
-            nombre_tarjeta = f"{ape_pat} {nombre} {ape_mat}".strip() or f"Tarjeta {id_tarjeta}"
+            nombre_tarjeta = f"{nombre} {ape_pat} {ape_mat}".strip() or f"Tarjeta {id_tarjeta}"
             if id_tarjeta not in tarjetas_data:
                 tarjetas_data[id_tarjeta] = {
                     'nombre': nombre_tarjeta,
@@ -354,7 +354,7 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
             nombre = row.get('NOMBRE', '')
             ape_pat = row.get('APELLIDO_PATERNO', '')
             ape_mat = row.get('APELLIDO_MATERNO', '')
-            nombre_tarjeta = f"{ape_pat} {nombre} {ape_mat}".strip() or f"Tarjeta {id_tarjeta}"
+            nombre_tarjeta = f"{nombre} {ape_pat} {ape_mat}".strip() or f"Tarjeta {id_tarjeta}"
             if id_tarjeta not in tarjetas_data:
                 tarjetas_data[id_tarjeta] = {
                     'nombre': nombre_tarjeta,

@@ -264,7 +264,7 @@ class SimuladorBot:
             
             for i, t in enumerate(result.data, 1):
                 catastro = t.get('CATASTRO', catastro)
-                nombre = f"{t.get('APELLIDO_PATERNO', '')} {t.get('NOMBRE', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
+                nombre = f"{t.get('NOMBRE', '')} {t.get('APELLIDO_PATERNO', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
                 print(f"{i}. {nombre} - {catastro}")
                 print()
             
@@ -284,7 +284,7 @@ class SimuladorBot:
                 t = self.tarjetas[opcion - 1]
                 self.estado['tarjetaSeleccionada'] = t.get('CATASTRO', catastro)
                 self.estado['tarjetaId'] = t['ID_TARJETA']
-                nombre = f"{t.get('APELLIDO_PATERNO', '')} {t.get('NOMBRE', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
+                nombre = f"{t.get('NOMBRE', '')} {t.get('APELLIDO_PATERNO', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
                 self.estado['tarjetaNombre'] = nombre
                 self.estado['tipoBusqueda'] = 'TARJETA_CATASTRO'
             
@@ -416,7 +416,7 @@ class SimuladorBot:
         
         for i, t in enumerate(self.tarjetas, 1):
             catastro = t.get('CATASTRO', self.estado.get('identificador'))
-            nombre = f"{t.get('APELLIDO_PATERNO', '')} {t.get('NOMBRE', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
+            nombre = f"{t.get('NOMBRE', '')} {t.get('APELLIDO_PATERNO', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
             print(f"{i}. {nombre} - {catastro}")
         
         print()
