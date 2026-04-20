@@ -293,7 +293,7 @@ class SimuladorBot:
         if tipo == 'TARJETA':
             print(f"Tarjeta: {self.estado.get('identificador')}")
         elif tipo == 'TARJETA_CATASTRO':
-            print(f"Catastro: {self.estado.get('identificador')} - {self.estado.get('tarjetaNombre')}")
+            print(f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaNombre')}")
         elif tipo == 'CONTRIBUYENTE':
             catastro = self.estado.get('catastroSeleccionado', '')
             tarjeta = self.estado.get('tarjetaSeleccionada', '')
@@ -348,7 +348,7 @@ class SimuladorBot:
             if tipo == 'TARJETA':
                 header += f"Tarjeta: {self.estado.get('identificador')}"
             elif tipo == 'TARJETA_CATASTRO':
-                header += f"Catastro: {self.estado.get('identificador')} - {self.estado.get('tarjetaNombre')}"
+                header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaNombre')}"
             elif tipo == 'CONTRIBUYENTE':
                 catastro = self.estado.get('catastroSeleccionado', '')
                 tarjeta = self.estado.get('tarjetaSeleccionada', '')
@@ -436,7 +436,7 @@ class SimuladorBot:
         if result.success:
             header = f"DETALLE: Cuentas Pendientes\n"
             if tipo == 'TARJETA_CATASTRO':
-                header += f"Catastro: {self.estado.get('identificador')} - {self.estado.get('tarjetaNombre')}\n"
+                header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaNombre')}\n"
             elif tipo == 'TARJETA':
                 header += f"Tarjeta: {self.estado.get('identificador')}\n"
             
