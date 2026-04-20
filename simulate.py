@@ -266,7 +266,7 @@ class SimuladorBot:
                 self.estado['tipoBusqueda'] = 'CATASTRO'
             else:
                 t = self.tarjetas[opcion - 1]
-                self.estado['tarjetaSeleccionada'] = t['NOMBRE']
+                self.estado['tarjetaSeleccionada'] = t.get('CATASTRO', catastro)
                 self.estado['tarjetaId'] = t['ID_TARJETA']
                 self.estado['tarjetaNombre'] = t['NOMBRE']
                 self.estado['tipoBusqueda'] = 'TARJETA_CATASTRO'
@@ -293,7 +293,7 @@ class SimuladorBot:
         if tipo == 'TARJETA':
             print(f"Tarjeta: {self.estado.get('identificador')}")
         elif tipo == 'TARJETA_CATASTRO':
-            print(f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaNombre')}")
+            print(f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}")
         elif tipo == 'CONTRIBUYENTE':
             catastro = self.estado.get('catastroSeleccionado', '')
             tarjeta = self.estado.get('tarjetaSeleccionada', '')
@@ -348,7 +348,7 @@ class SimuladorBot:
             if tipo == 'TARJETA':
                 header += f"Tarjeta: {self.estado.get('identificador')}"
             elif tipo == 'TARJETA_CATASTRO':
-                header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaNombre')}"
+                header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}"
             elif tipo == 'CONTRIBUYENTE':
                 catastro = self.estado.get('catastroSeleccionado', '')
                 tarjeta = self.estado.get('tarjetaSeleccionada', '')
@@ -436,7 +436,7 @@ class SimuladorBot:
         if result.success:
             header = f"DETALLE: Cuentas Pendientes\n"
             if tipo == 'TARJETA_CATASTRO':
-                header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaNombre')}\n"
+                header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}\n"
             elif tipo == 'TARJETA':
                 header += f"Tarjeta: {self.estado.get('identificador')}\n"
             
