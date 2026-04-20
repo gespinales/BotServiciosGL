@@ -342,9 +342,9 @@ class SimuladorBot:
                 'id_entidad': self.estado['entidad']
             }
         elif self.estado.get('tipoBusqueda') == 'TARJETA':
-            query_id = 'cta_pendiente_tarjeta_agrupado'
+            query_id = 'cta_pendiente_tarjeta'
             params = {
-                'identificador': self.estado['identificador'],
+                'id_tarjeta': self.estado['identificador'],
                 'id_entidad': self.estado['entidad']
             }
         elif self.estado.get('tipoBusqueda') == 'TARJETA_CATASTRO':
