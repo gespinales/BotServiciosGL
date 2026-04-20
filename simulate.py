@@ -294,7 +294,11 @@ class SimuladorBot:
             print(f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}")
         elif tipo == 'CONTRIBUYENTE':
             catastro = self.estado.get('catastroSeleccionado', '')
-            print(f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro}")
+            tarjeta = self.estado.get('tarjetaSeleccionada', '')
+            if tarjeta and tarjeta != 'TODAS':
+                print(f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro} - Tarjeta: {tarjeta}")
+            else:
+                print(f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro}")
         else:
             print(f"ID: {self.estado.get('identificador')}")
         print()
