@@ -295,6 +295,8 @@ class SimuladorBot:
         
         if tipo == 'TARJETA':
             print(f"Tarjeta: {self.estado.get('identificador')}")
+        elif tipo == 'CATASTRO':
+            print(f"Catastro: {self.estado.get('identificador')}")
         elif tipo == 'TARJETA_CATASTRO':
             print(f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}")
         elif tipo == 'CONTRIBUYENTE':
@@ -322,7 +324,13 @@ class SimuladorBot:
             'id_entidad': self.estado['entidad']
         }
         
-        if self.estado.get('tipoBusqueda') == 'TARJETA_CATASTRO':
+        if self.estado.get('tipoBusqueda') == 'CATASTRO':
+            query_id = 'cta_pendiente_tarjeta_agrupado'
+            params = {
+                'identificador': self.estado['identificador'],
+                'id_entidad': self.estado['entidad']
+            }
+        elif self.estado.get('tipoBusqueda') == 'TARJETA_CATASTRO':
             query_id = 'cta_pendiente_tarjeta'
             params = {
                 'id_tarjeta': self.estado['tarjetaId'],
@@ -350,6 +358,8 @@ class SimuladorBot:
             tipo = self.estado.get('tipoBusqueda')
             if tipo == 'TARJETA':
                 header += f"Tarjeta: {self.estado.get('identificador')}"
+            elif tipo == 'CATASTRO':
+                header += f"Catastro: {self.estado.get('identificador')}"
             elif tipo == 'TARJETA_CATASTRO':
                 header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}"
             elif tipo == 'CONTRIBUYENTE':
