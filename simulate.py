@@ -349,7 +349,11 @@ class SimuladorBot:
                 header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}"
             elif tipo == 'CONTRIBUYENTE':
                 catastro = self.estado.get('catastroSeleccionado', '')
-                header += f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro}"
+                tarjeta = self.estado.get('tarjetaSeleccionada', '')
+                if tarjeta and tarjeta != 'TODAS':
+                    header += f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro} - Tarjeta: {tarjeta}"
+                else:
+                    header += f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro}"
             else:
                 header += f"Tipo: {tipo} - ID: {self.estado.get('identificador')}"
             
