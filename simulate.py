@@ -176,7 +176,7 @@ class SimuladorBot:
         print()
         print(f"Has elegido: Buscar por {tipo}")
         print()
-        print(f"{prompts[tipo]}:")
+        print(f"{prompts[tipo_idx]}):")
         print("(Escribe X para reiniciar)")
         
         identificador = input("\n>>> Tu respuesta: ").strip().upper()
