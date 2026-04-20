@@ -280,19 +280,23 @@ class SimuladorBot:
         print("=" * 60)
         print()
         
-        id_label = self.estado.get('identificador', '')
-        if self.estado.get('tipoBusqueda') == 'TARJETA_CATASTRO':
-            id_label = f"{self.estado.get('identificador')} > {self.estado.get('tarjetaSeleccionada')}"
+        tipo = self.estado.get('tipoBusqueda')
         
         print("CONSULTA DE CUENTA CORRIENTE")
         print()
         print(f"Departamento: {self.estado.get('deptoNombre')}")
         print(f"Entidad: {self.estado.get('entidadNombre')}")
-        print(f"Tipo: {self.estado.get('tipoBusqueda')}")
-        if self.estado.get('catastroSeleccionado'):
-            print(f"ID: {self.estado.get('identificador')} > {self.estado.get('catastroSeleccionado')}")
+        print(f"Tipo: {tipo}")
+        
+        if tipo == 'TARJETA':
+            print(f"Tarjeta: {self.estado.get('identificador')}")
+        elif tipo == 'TARJETA_CATASTRO':
+            print(f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}")
+        elif tipo == 'CONTRIBUYENTE':
+            catastro = self.estado.get('catastroSeleccionado', '')
+            print(f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro}")
         else:
-            print(f"ID: {id_label}")
+            print(f"ID: {self.estado.get('identificador')}")
         print()
         print("Paso 4: Selecciona la consulta:")
         print("1. Cuentas Pendientes")
