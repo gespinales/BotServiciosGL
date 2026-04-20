@@ -36,7 +36,7 @@
   {
     "id": "tarjetas_por_catastro",
     "description": "Lista de tarjetas de un catastro por entidad",
-    "sql": "SELECT cs.ID_CONTRIBUYENTE_SERVICIO AS ID_TARJETA, cg.NOMBRE FROM CONTRIBUYENTE_SERVICIO cs JOIN SERVICIO_CATASTRO sc ON cs.ID_SERVICIO_CATASTRO = sc.ID_SERVICIO_CATASTRO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE sc.IDENTIFICADOR = :catastro AND sc.ID_ENTIDAD = :id_entidad ORDER BY cg.NOMBRE",
+    "sql": "SELECT cs.ID_CONTRIBUYENTE_SERVICIO AS ID_TARJETA, cg.NOMBRE, sc.IDENTIFICADOR AS CATASTRO FROM CONTRIBUYENTE_SERVICIO cs JOIN SERVICIO_CATASTRO sc ON cs.ID_SERVICIO_CATASTRO = sc.ID_SERVICIO_CATASTRO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE sc.IDENTIFICADOR = :catastro AND sc.ID_ENTIDAD = :id_entidad ORDER BY cg.NOMBRE",
     "format": "menu",
     "params": ["catastro", "id_entidad"]
   },
@@ -106,9 +106,9 @@
   {
     "id": "cta_pendiente_detalle_tarjeta",
     "description": "Detalle de cuentas pendientes por tarjeta",
-    "sql": "SELECT cc.DESCRIPCION, cc.MONTO, cc.MONTO_IVA, cc.FECHA_MAX_PAGO, cc.MULTADA FROM CUENTA_CORRIENTE cc WHERE cc.ID_CONTRIBUYENTE_SERVICIO = :id_tarjeta AND cc.ESTADO = 'POR_PAGAR' ORDER BY cc.FECHA_MAX_PAGO",
+    "sql": "SELECT cc.DESCRIPCION, cc.MONTO, cc.MONTO_IVA, cc.FECHA_MAX_PAGO, cc.MULTADA FROM CUENTA_CORRIENTE cc WHERE cc.ID_CONTRIBUYENTE_SERVICIO = :id_tarjeta AND cc.ID_ENTIDAD = :id_entidad AND cc.ESTADO = 'POR_PAGAR' ORDER BY cc.FECHA_MAX_PAGO",
     "format": "detalle",
-    "params": ["id_tarjeta"]
+    "params": ["id_tarjeta", "id_entidad"]
   },
   {
     "id": "cta_vencida_contribuyente",
