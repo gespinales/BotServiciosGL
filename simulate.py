@@ -200,11 +200,16 @@ class SimuladorBot:
         
         if result.success and result.data:
             self.catastros = result.data
+            # Nombre completo
+            first = result.data[0]
+            nombre_completo = f"{first.get('NOMBRE', '')} {first.get('APELLIDO_PATERNO', '')} {first.get('APELLIDO_MATERNO', '')}".strip()
+            self.estado['contribuyenteNombre'] = nombre_completo
+            
             print("\n" + "=" * 60)
             print(f"CATASTROS DEL CONTRIBUYENTE: {dpi}")
             print("=" * 60)
             print()
-            print(f"CONTRIBUYENTE: {dpi}")
+            print(f"CONTRIBUYENTE: {nombre_completo}")
             print()
             print(f"Se encontraron {len(result.data)} catastro(s):")
             print()
@@ -227,6 +232,13 @@ class SimuladorBot:
                 self.estado['catastroSeleccionado'] = 'TODAS'
             else:
                 self.estado['catastroSeleccionado'] = self.catastros[opcion - 1]['CATASTRO']
+            
+            # Guardar el nombre del contribuyente
+            if result.data:
+                first_row = result.data[0]
+                nombre = first_row.get('NOMBRE', '')
+                nombre += ' ' + first_row.get('APELLIDO_PATERNO', '') + ' ' + first_row.get('APELLIDO_MATERNO', '')
+                self.estado['contribuyenteNombre'] = nombre.strip()
             
             return True
         else:
@@ -300,12 +312,9 @@ class SimuladorBot:
         elif tipo == 'TARJETA_CATASTRO':
             print(f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}")
         elif tipo == 'CONTRIBUYENTE':
+            nombre = self.estado.get('contribuyenteNombre', self.estado.get('identificador'))
             catastro = self.estado.get('catastroSeleccionado', '')
-            tarjeta = self.estado.get('tarjetaSeleccionada', '')
-            if tarjeta and tarjeta != 'TODAS':
-                print(f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro} - Tarjeta: {tarjeta}")
-            else:
-                print(f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro}")
+            print(f"Contribuyente: {nombre} - Catastro: {catastro}")
         else:
             print(f"ID: {self.estado.get('identificador')}")
         print()
@@ -338,7 +347,7 @@ class SimuladorBot:
             }
         elif self.estado.get('tipoBusqueda') == 'CONTRIBUYENTE':
             query_id = 'cta_pendiente_contribuyente'
-            dpi = self.estado.get('catastroSeleccionado', self.estado['identificador'])
+            dpi = self.estado['identificador']
             params = {
                 'dpi': dpi,
                 'id_entidad': self.estado['entidad']
@@ -364,12 +373,9 @@ class SimuladorBot:
             elif tipo == 'TARJETA_CATASTRO':
                 header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}"
             elif tipo == 'CONTRIBUYENTE':
+                nombre = self.estado.get('contribuyenteNombre', self.estado.get('identificador'))
                 catastro = self.estado.get('catastroSeleccionado', '')
-                tarjeta = self.estado.get('tarjetaSeleccionada', '')
-                if tarjeta and tarjeta != 'TODAS':
-                    header += f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro} - Tarjeta: {tarjeta}"
-                else:
-                    header += f"Contribuyente: {self.estado.get('identificador')} - Catastro: {catastro}"
+                header += f"Contribuyente: {nombre} - Catastro: {catastro}"
             else:
                 header += f"ID: {self.estado.get('identificador')}"
             
