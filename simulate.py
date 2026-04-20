@@ -151,6 +151,9 @@ class SimuladorBot:
                     self.limpiar_estado()
                     return 'REINICIAR'
                 
+                if opcion == 'T':
+                    return 'T'
+                
                 num = int(opcion)
                 if 1 <= num <= max_opcion:
                     return num
