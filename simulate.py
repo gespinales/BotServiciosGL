@@ -486,11 +486,26 @@ class SimuladorBot:
             
             self.ejecutar_resumen()
             
-            input("\n>>> Presiona ENTER para continuar al detalle...")
+            tipo = self.estado.get('tipoBusqueda')
+            tarjeta_sel = self.estado.get('tarjetaSeleccionada', '')
             
-            opcion = self.pedir_seleccion_detalle()
-            if opcion and opcion != 'REINICIAR':
-                self.ejecutar_detalle(opcion)
+            if tipo == 'TARJETA':
+                input("\n>>> Presiona ENTER para ver detalle...")
+                self.ejecutar_detalle()
+            elif tipo == 'TARJETA_CATASTRO' and tarjeta_sel == 'TODAS':
+                input("\n>>> Presiona ENTER para ver detalle...")
+                self.ejecutar_detalle('T')
+            elif tipo == 'TARJETA_CATASTRO':
+                input("\n>>> Presiona ENTER para ver detalle...")
+                self.ejecutar_detalle()
+            elif tipo == 'CONTRIBUYENTE':
+                input("\n>>> Presiona ENTER para continuar...")
+                opcion = self.pedir_seleccion_detalle()
+                if opcion and opcion != 'REINICIAR':
+                    self.ejecutar_detalle(opcion)
+            else:
+                input("\n>>> Presiona ENTER para ver detalle...")
+                self.ejecutar_detalle()
             
             input("\n>>> Presiona ENTER para nueva consulta...")
             
