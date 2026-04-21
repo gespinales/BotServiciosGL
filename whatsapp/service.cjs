@@ -36,28 +36,68 @@ class WhatsAppService {
     async connect() {
         this.client = new Client({
             authStrategy: new LocalAuth({
-                dataPath: './data/session'
+                dataPath: './data/session',
+                clientId: 'botserviciosgl'
             }),
             puppeteer: {
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=IsolateOrigins,site-per-process'
+                ]
+            },
+            webVersionCache: {
+                type: 'local',
+                path: './.wwebjs_cache'
             }
         });
 
         this.client.on('qr', async (qr) => {
-            console.log('\n=== ESCANEA EL CODIGO QR ===');
+            console.log('\n========================================');
+            console.log('  ESCANEA EL CODIGO QR CON WHATSAPP');
+            console.log('========================================');
+            console.log('1. Abre WhatsApp en tu telefono');
+            console.log('2. Menu > Dispositivos vinculados');
+            console.log('3. Vincular dispositivo');
+            console.log('========================================\n');
+            
             const qrPath = path.join(__dirname, '..', 'data', 'qr.png');
-            await QRCode.toFile(qrPath, qr);
-            console.log(`QR guardado en: ${qrPath}\n`);
+            await QRCode.toFile(qrPath, qr, { width: 400 });
+            console.log(`QR guardado en: ${qrPath}`);
+            console.log('Abre el archivo para escanearlo\n');
+        });
+
+        this.client.on('loading_screen', (percent, message) => {
+            console.log(`Cargando: ${percent}% - ${message}`);
+        });
+
+        this.client.on('authenticated', () => {
+            console.log('WhatsApp autenticado!');
+        });
+
+        this.client.on('auth_failure', (msg) => {
+            console.error('Error de autenticacion:', msg);
         });
 
         this.client.on('ready', () => {
-            console.log('WhatsApp conectado!');
+            console.log('WhatsApp conectado y listo!');
             this.ready = true;
         });
 
         this.client.on('message', async (msg) => {
             await this.handleMessage(msg);
+        });
+
+        this.client.on('disconnected', (reason) => {
+            console.log('WhatsApp desconectado:', reason);
+            this.ready = false;
         });
 
         await this.client.initialize();
@@ -71,13 +111,11 @@ class WhatsAppService {
         const from = msg.from;
         const text = msg.body.trim().toUpperCase();
 
-        console.log(`Mensaje de ${from}: ${text}`);
-
         // Verificar timeout de sesión
         if (this.verificarTimeout(from)) {
             this.userState[from] = { primer_mensaje: true, ultimaActividad: Date.now() };
             await this.enviarBienvenida(msg);
-            await msg.reply('Tu sesión ha expire y se ha cerrado por inactividad.\n\nPero no te preocupes, podemos comenzar de nuevo! :)');
+            await msg.reply('Tu sesión ha expirado y se ha cerrado por inactividad.\n\nPero no te preocupes, podemos comenzar de nuevo! :)');
             return;
         }
         
@@ -87,7 +125,11 @@ class WhatsAppService {
         // Si no hay estado, es el primer mensaje -> dar bienvenida
         if (!estado) {
             this.userState[from] = { primer_mensaje: true, ultimaActividad: Date.now() };
-            await this.enviarBienvenida(msg);
+            try {
+                await this.enviarBienvenida(msg);
+            } catch (error) {
+                console.error('Error al enviar bienvenida:', error);
+            }
             return;
         }
         
@@ -97,7 +139,12 @@ class WhatsAppService {
         // Si hay estado pero solo primer_mensaje, es el segundo mensaje -> departamentos
         if (estado.primer_mensaje) {
             delete this.userState[from];
-            await this.enviarDepartamentos(msg);
+            try {
+                await this.enviarDepartamentos(msg);
+            } catch (error) {
+                console.error('Error al enviar departamentos:', error);
+                await msg.reply('Lo siento, hubo un error al cargar los departamentos. Intenta nuevamente.');
+            }
             return;
         }
 
@@ -215,12 +262,34 @@ class WhatsAppService {
                 return;
             }
             
-            this.userState[from].tarjetaSeleccionada = estado.tarjetasCatastro[num - 1].ID_TARJETA;
-            this.userState[from].tarjetaNombre = estado.tarjetasCatastro[num - 1].NOMBRE;
+            const t = estado.tarjetasCatastro[num - 1];
+            // Formato igual que simulate.py:
+            // - tarjetaSeleccionada = IDENTIFICADOR del catastro (CATASTRO)
+            // - tarjetaId = ID_TARJETA para queries
+            // - tarjetaNombre = nombre completo
+            this.userState[from].tarjetaSeleccionada = t.CATASTRO || estado.identificador;
+            this.userState[from].tarjetaId = t.ID_TARJETA;
+            this.userState[from].tarjetaNombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
             this.userState[from].tipoBusqueda = 'TARJETA_CATASTRO';
             delete this.userState[from].esperandoTarjeta;
             await this.enviarMenu(msg, from);
             return;
+        }
+
+        // MANEJO PRIORITARIO DE RESPUESTA S/N - ANTES DE TODO
+        if (estado.esperandoDetalle) {
+            if (text === 'S') {
+                delete this.userState[from].esperandoDetalle;
+                await this.runDetalle(msg, from);
+                return;
+            } else if (text === 'N' || text === 'X') {
+                delete this.userState[from];
+                await msg.reply('Gracias por usar el servicio. Hasta luego!');
+                return;
+            } else {
+                await msg.reply('Opcion no valida. Escribe S para ver detalle o N para salir.');
+                return;
+            }
         }
 
         if (!estado.queryType) {
@@ -280,29 +349,30 @@ class WhatsAppService {
     }
 
     getOpcionesConsulta(tipo, catastro) {
-        const base = {
-            '1': { sufijos: ['pendiente'], nombre: ['Cuentas Pendientes'] },
+        // Definición de opciones de consulta
+        // Estructura: numero: { sufijo, nombre, queries: { tipo_busqueda: {resumen, detalle} } }
+        const opciones = {
+            '1': {
+                sufijo: 'pendiente',
+                nombre: 'Cuentas Pendientes',
+                queries: {
+                    // Exactamente igual que simulate.py - siempre usar cta_pendiente_detalle
+                    'CONTRIBUYENTE': { resumen: 'cta_pendiente_contribuyente', detalle: 'cta_pendiente_detalle' },
+                    'CATASTRO': { resumen: 'cta_pendiente_tarjeta_agrupado', detalle: 'cta_pendiente_detalle' },
+                    'TARJETA_CATASTRO': { resumen: 'cta_pendiente_tarjeta_agrupado', detalle: 'cta_pendiente_detalle' },
+                    'TARJETA': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle' }
+                }
+            }
         };
         
         const result = {};
-        for (let i = 1; i <= 1; i++) {
-            let resumen, detalle;
-            
-            if (tipo === 'CONTRIBUYENTE') {
-                resumen = `cta_${base['1'].sufijos[i-1]}_contribuyente`;
-                detalle = `cta_${base['1'].sufijos[i-1]}_detalle`;
-            } else if (tipo === 'CATASTRO') {
-                resumen = `cta_${base['1'].sufijos[i-1]}_tarjeta_agrupado`;
-                detalle = `cta_${base['1'].sufijos[i-1]}_detalle`;
-            } else if (tipo === 'TARJETA_CATASTRO') {
-                resumen = `cta_${base['1'].sufijos[i-1]}_tarjeta`;
-                detalle = `cta_${base['1'].sufijos[i-1]}_detalle_tarjeta`;
-            } else {
-                resumen = `cta_${base['1'].sufijos[i-1]}_tarjeta`;
-                detalle = `cta_${base['1'].sufijos[i-1]}_detalle_tarjeta`;
-            }
-            
-            result[i.toString()] = { resumen, detalle, nombre: base['1'].nombre[i-1] };
+        for (const [key, config] of Object.entries(opciones)) {
+            const queriesForType = config.queries[tipo] || config.queries['TARJETA'];
+            result[key] = {
+                resumen: queriesForType.resumen,
+                detalle: queriesForType.detalle,
+                nombre: config.nombre
+            };
         }
         return result;
     }
@@ -311,9 +381,14 @@ class WhatsAppService {
         return {};
     }
 
-    async enviarDepartamentos(msg) {
+async enviarDepartamentos(msg) {
         try {
             const deptos = await this.obtenerDepartamentos();
+            
+            if (!deptos || deptos.length === 0) {
+                await msg.reply('Error: No se pudieron cargar los departamentos. Intenta nuevamente.');
+                return;
+            }
             
             let mensaje = `CONSULTAS DE CUENTA CORRIENTE\n\nPaso 1: Selecciona el DEPARTAMENTO\n\n`;
             deptos.forEach((d, i) => {
@@ -323,10 +398,10 @@ class WhatsAppService {
             
             await msg.reply(mensaje);
         } catch (error) {
-            console.error('Error:', error);
-            await msg.reply('Error al cargar departamentos.');
+            console.error('Error en enviarDepartamentos:', error);
+            await msg.reply('Error al cargar departamentos. Por favor intenta nuevamente.');
         }
-    }
+}
 
     getSaludo() {
         const ahora = new Date();
@@ -414,7 +489,12 @@ Escribe X para salir.`;
             
             this.userState[from].catastros = catastros;
             
-            let mensaje = `CONTRIBUYENTE: ${estado.identificador}\n\nSe encontraron ${catastros.length} catastro(s):\n\n`;
+            // Guardar nombre completo del contribuyente
+            const primerCatastro = catastros[0];
+            const nombreCompleto = `${primerCatastro.NOMBRE || ''} ${primerCatastro.APELLIDO_PATERNO || ''} ${primerCatastro.APELLIDO_MATERNO || ''}`.trim();
+            this.userState[from].contribuyenteNombre = nombreCompleto;
+            
+            let mensaje = `CONTRIBUYENTE: ${estado.identificador} - ${nombreCompleto}\n\nSe encontraron ${catastros.length} catastro(s):\n\n`;
             catastros.forEach((c, i) => {
                 mensaje += `${i + 1}. CATASTRO: ${c.CATASTRO}\n   Entidad: ${c.ENTIDAD}\n\n`;
             });
@@ -443,9 +523,12 @@ Escribe X para salir.`;
             
             let mensaje = `CATASTRO: ${estado.identificador}\n\nSe encontraron ${tarjetas.length} tarjeta(s) en este catastro:\n\n`;
             tarjetas.forEach((t, i) => {
-                mensaje += `${i + 1}. TARJETA: ${t.ID_TARJETA}\n   Nombre: ${t.NOMBRE}\n\n`;
+                // Formato igual que simulate.py: nombre completo + identificador de catastro
+                const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
+                const catastroIdent = t.CATASTRO || estado.identificador;
+                mensaje += `${i + 1}. ${nombre} - ${catastroIdent}\n\n`;
             });
-            mensaje += `\nT. Ver todas las cuentas del catastro (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver el resumen completo del catastro:`;
+            mensaje += `T. Ver todas las cuentas del catastro (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver el resumen completo del catastro:`;
             
             await msg.reply(mensaje);
             this.userState[from].esperandoTarjeta = true;
@@ -458,23 +541,31 @@ Escribe X para salir.`;
     async enviarMenu(msg, from) {
         const estado = this.userState[from];
         
-        let tipoLabel = estado.tipoBusqueda;
-        let idLabel = estado.identificador;
+        // Formato exactamente igual que simulate.py
+        let tipo = estado.tipoBusqueda;
+        let idMostrar = '';
         
-        if (estado.tipoBusqueda === 'CONTRIBUYENTE' && estado.catastroSeleccionado) {
-            tipoLabel = 'CONTRIBUYENTE > CATASTRO';
-            idLabel = `${estado.identificador} > ${estado.catastroSeleccionado}`;
-        } else if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
-            tipoLabel = 'CATASTRO > TARJETA';
-            idLabel = `${estado.identificador} > ${estado.tarjetaSeleccionada}`;
+        if (tipo === 'TARJETA') {
+            idMostrar = `Tarjeta: ${estado.identificador}`;
+        } else if (tipo === 'CATASTRO') {
+            idMostrar = `Catastro: ${estado.identificador}`;
+        } else if (tipo === 'TARJETA_CATASTRO') {
+            // - Tarjeta: debe ser el IDENTIFICADOR (CATASTRO de servicio_catastro), no el nombre
+            idMostrar = `Catastro: ${estado.identificador} - Tarjeta: ${estado.tarjetaSeleccionada || ''}`;
+        } else if (tipo === 'CONTRIBUYENTE') {
+            let nombre = estado.contribuyenteNombre || estado.identificador;
+            let catastro = estado.catastroSeleccionado || '';
+            idMostrar = `Contribuyente: ${nombre} - Catastro: ${catastro}`;
+        } else {
+            idMostrar = `ID: ${estado.identificador}`;
         }
         
         const mensaje = `CONSULTA DE CUENTA CORRIENTE
 
 Departamento: ${estado.deptoNombre}
 Entidad: ${estado.entidadNombre}
-Tipo: ${tipoLabel}
-ID: ${idLabel}
+Tipo: ${tipo}
+${idMostrar}
 
 Paso 4: Selecciona la consulta:
 1. Cuentas Pendientes
@@ -488,9 +579,13 @@ X. Salir`;
     async pedirSeleccionTarjetaDetalle(msg, from) {
         const estado = this.userState[from];
         
-        let mensaje = `Deseas ver el DETALLE?\n\n`;
+        // Lista de tarjetas para seleccionar cual ver en detalle
+        let mensaje = ``;
         estado.tarjetasCatastro.forEach((t, i) => {
-            mensaje += `${i + 1}. ${t.ID_TARJETA} - ${t.NOMBRE}\n`;
+            // Formato: numero + nombre completo + catastro (identificador)
+            const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
+            const catastro = t.CATASTRO || estado.identificador;
+            mensaje += `${i + 1}. ${nombre} - ${catastro}\n`;
         });
         mensaje += `\nT. Ver todas las tarjetas\n\nEscribe el numero de la tarjeta:`;
         
@@ -498,22 +593,35 @@ X. Salir`;
         this.userState[from].solicitandoDetalleTarjeta = true;
     }
 
+    async preguntarDetalle(msg, from) {
+        // Preguntar si desea ver el detalle - formato igual que simulate.py
+        const estado = this.userState[from];
+        
+        let mensaje = `Deseas ver el DETALLE? (S/N)\n\n`;
+        mensaje += `Escribe S para ver el detalle.\n`;
+        mensaje += `Escribe N o X para salir.`;
+        
+        await msg.reply(mensaje);
+        this.userState[from].esperandoDetalle = true;
+    }
+
     async runDetalleTarjeta(msg, from) {
         const estado = this.userState[from];
         
         try {
+            // Usar 'identificador' igual que simulate.py - usar cta_pendiente_detalle
             const params = {
-                id_tarjeta: estado.tarjetaDetalleSeleccionada,
+                identificador: estado.identificador,
                 id_entidad: estado.entidadId
             };
             
             const respuesta = await this.ejecutarPython(
-                'cta_pendiente_detalle_tarjeta', 
+                'cta_pendiente_detalle', 
                 params
             );
             
             let header = `DETALLE: ${estado.queryName}\n`;
-            header += `Tarjeta: ${estado.tarjetaDetalleSeleccionada} - ${estado.tarjetaNombre}\n\n`;
+            header += `Catastro: ${estado.identificador} - Tarjeta: ${estado.tarjetaSeleccionada}\n\n`;
             
             if (respuesta.startsWith('ERROR')) {
                 await msg.reply(header + respuesta.replace('ERROR: ', ''));
@@ -539,13 +647,24 @@ X. Salir`;
                 params
             );
             
+            // Formato igual que simulate.py
             let header = `${estado.queryName}\n`;
             header += `Depto: ${estado.deptoNombre} | Entidad: ${estado.entidadNombre}\n`;
-            header += `Tipo: ${estado.tipoBusqueda}`;
-            if (estado.catastroSeleccionado) {
-                header += ` > ${estado.catastroSeleccionado}`;
+            
+            let tipoInfo = estado.tipoBusqueda;
+            if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                // - Tarjeta: debe ser el IDENTIFICADOR (CATASTRO), no el nombre
+                tipoInfo = `Catastro: ${estado.identificador} - Tarjeta: ${estado.tarjetaSeleccionada || ''}`;
+            } else if (estado.tipoBusqueda === 'CONTRIBUYENTE' && estado.catastroSeleccionado) {
+                let nombre = estado.contribuyenteNombre || estado.identificador;
+                tipoInfo = `Contribuyente: ${nombre} - Catastro: ${estado.catastroSeleccionado}`;
+            } else if (estado.tipoBusqueda === 'CATASTRO') {
+                tipoInfo = `Catastro: ${estado.identificador}`;
+            } else if (estado.tipoBusqueda === 'TARJETA') {
+                tipoInfo = `Tarjeta: ${estado.identificador}`;
             }
-            header += `\nID: ${estado.identificador}\n\n`;
+            
+            header += `${tipoInfo}\n\n`;
             
             if (respuesta.startsWith('ERROR')) {
                 await msg.reply(header + respuesta.replace('ERROR: ', ''));
@@ -554,11 +673,12 @@ X. Salir`;
                 await msg.reply(header + respuesta);
                 delete this.userState[from];
             } else {
-                if (estado.tarjetasCatastro && estado.tarjetasCatastro.length > 0) {
-                    await this.pedirSeleccionTarjetaDetalle(msg, from);
-                } else {
-                    await this.runDetalle(msg, from);
-                }
+                // MOSTRAR el resumen (ya incluye "¿Deseas ver el detalle? (S/N)")
+                await msg.reply(header + respuesta);
+                
+                // Solo establecer flag para esperar respuesta S/N
+                // NO enviar otro mensaje - el formateador ya incluye la pregunta
+                this.userState[from].esperandoDetalle = true;
             }
         } catch (error) {
             console.error('Error:', error);
@@ -574,35 +694,53 @@ X. Salir`;
             let params;
             let queryId = estado.queryDetalle;
             
-            // Si es CATASTRO y选择了 "T" (ver todas), usar query de detalle por catastro
-            if (estado.tipoBusqueda === 'CATASTRO' && !estado.tarjetaDetalleSeleccionada) {
+            // Exactamente igual que simulate.py
+            if (estado.tipoBusqueda === 'CATASTRO') {
+                // Detail por catastro
                 params = {
                     identificador: estado.identificador,
                     id_entidad: estado.entidadId
                 };
                 queryId = 'cta_pendiente_detalle';
             } else if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
-                // Detail specific
+                // Exactamente igual que simulate.py - usar identificador
                 params = {
-                    id_tarjeta: estado.tarjetaDetalleSeleccionada,
+                    identificador: estado.identificador,
                     id_entidad: estado.entidadId
                 };
-                queryId = 'cta_pendiente_detalle_tarjeta';
+                queryId = 'cta_pendiente_detalle';
+            } else if (estado.tipoBusqueda === 'TARJETA') {
+                // Exactamente igual que simulate.py - usar identificador
+                params = {
+                    identificador: estado.identificador,
+                    id_entidad: estado.entidadId
+                };
+                queryId = 'cta_pendiente_detalle';
+            } else if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
+                params = {
+                    dpi: estado.identificador,
+                    id_entidad: estado.entidadId
+                };
+                queryId = 'cta_pendiente_detalle_contribuyente';
             } else {
                 params = this.getQueryParams(estado);
-                if (estado.tipoBusqueda === 'TARJETA' && !queryId.endsWith('_tarjeta')) {
-                    queryId = queryId + '_tarjeta';
-                }
             }
             
             const respuesta = await this.ejecutarPython(queryId, params);
             
+            // Formato igual que simulate.py
             let header = `DETALLE: ${estado.queryName}\n`;
-            header += `Tipo: ${estado.tipoBusqueda}`;
-            if (estado.catastroSeleccionado) {
-                header += ` > ${estado.catastroSeleccionado}`;
+            if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                header += `Catastro: ${estado.identificador} - Tarjeta: ${estado.tarjetaSeleccionada || ''}\n`;
+            } else if (estado.tipoBusqueda === 'TARJETA') {
+                header += `Tarjeta: ${estado.identificador}\n`;
+            } else if (estado.tipoBusqueda === 'CATASTRO') {
+                header += `Catastro: ${estado.identificador}\n`;
+            } else if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
+                header += `Contribuyente: ${estado.contribuyenteNombre || estado.identificador}\n`;
+            } else {
+                header += `ID: ${estado.identificador}\n`;
             }
-            header += `\nID: ${estado.identificador}\n\n`;
             
             if (respuesta.startsWith('ERROR')) {
                 await msg.reply(header + respuesta.replace('ERROR: ', ''));
@@ -649,11 +787,11 @@ X. Salir`;
     }
 
     getQueryParams(estado) {
+        // Exactamente igual que simulate.py - usar 'identificador' para todas las queries
         if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
             return {
-                dpi: estado.catastroSeleccionado ? estado.catastroSeleccionado : estado.identificador,
-                id_entidad: estado.entidadId,
-                codigo_departamento: estado.departamento
+                dpi: estado.identificador,
+                id_entidad: estado.entidadId
             };
         } else if (estado.tipoBusqueda === 'CATASTRO') {
             return {
@@ -661,13 +799,15 @@ X. Salir`;
                 id_entidad: estado.entidadId
             };
         } else if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+            // Para TARJETA_CATASTRO también usa 'identificador' (el catastro)
             return {
-                id_tarjeta: estado.tarjetaSeleccionada,
+                identificador: estado.identificador,
                 id_entidad: estado.entidadId
             };
         } else {
+            // Para TARJETA también usa 'identificador'
             return {
-                id_tarjeta: estado.identificador,
+                identificador: estado.identificador,
                 id_entidad: estado.entidadId
             };
         }
@@ -680,21 +820,31 @@ sys.path.insert(0, '.')
 from src.queries.query_router import load_queries, execute_query
 import json
 
-queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
-load_queries(queries)
+try:
+    queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
+    load_queries(queries)
 
-result = execute_query('departamentos', {})
-if result.success and result.data:
-    print(json.dumps(result.data))
-else:
-    print('ERROR')
+    result = execute_query('departamentos', {})
+    if result.success and result.data:
+        print(json.dumps(result.data))
+    else:
+        print('ERROR')
+except Exception as e:
+    print('ERROR:', str(e))
         `;
         
         const result = await this.ejecutarPythonRaw(script);
-        if (result.trim() === 'ERROR' || !result.trim()) {
+        
+        if (result.trim() === 'ERROR' || !result.trim() || result.trim().startsWith('ERROR:')) {
             return [];
         }
-        return JSON.parse(result.trim());
+        
+        try {
+            return JSON.parse(result.trim());
+        } catch (e) {
+            console.error('Error parseando JSON:', e);
+            return [];
+        }
     }
 
     async obtenerEntidades(codigoDepto) {
@@ -704,21 +854,31 @@ sys.path.insert(0, '.')
 from src.queries.query_router import load_queries, execute_query
 import json
 
-queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
-load_queries(queries)
+try:
+    queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
+    load_queries(queries)
 
-result = execute_query('entidades_por_departamento', {'codigo_departamento': ${codigoDepto}})
-if result.success and result.data:
-    print(json.dumps(result.data))
-else:
-    print('ERROR')
+    result = execute_query('entidades_por_departamento', {'codigo_departamento': ${codigoDepto}})
+    if result.success and result.data:
+        print(json.dumps(result.data))
+    else:
+        print('ERROR')
+except Exception as e:
+    print('ERROR:', str(e))
         `;
         
         const result = await this.ejecutarPythonRaw(script);
-        if (result.trim() === 'ERROR' || !result.trim() || result.trim() === '[]') {
+        
+        if (result.trim() === 'ERROR' || !result.trim() || result.trim().startsWith('ERROR:')) {
             return [];
         }
-        return JSON.parse(result.trim());
+        
+        try {
+            return JSON.parse(result.trim());
+        } catch (e) {
+            console.error('Error parseando JSON:', e);
+            return [];
+        }
     }
 
     async obtenerCatastrosContribuyente(dpi, codigoDepto) {
@@ -728,21 +888,31 @@ sys.path.insert(0, '.')
 from src.queries.query_router import load_queries, execute_query
 import json
 
-queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
-load_queries(queries)
+try:
+    queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
+    load_queries(queries)
 
-result = execute_query('catastros_por_contribuyente', {'dpi': '${dpi}', 'codigo_departamento': ${codigoDepto}})
-if result.success and result.data:
-    print(json.dumps(result.data))
-else:
-    print('ERROR')
+    result = execute_query('catastros_por_contribuyente', {'dpi': '${dpi}', 'codigo_departamento': ${codigoDepto}})
+    if result.success and result.data:
+        print(json.dumps(result.data))
+    else:
+        print('ERROR')
+except Exception as e:
+    print('ERROR:', str(e))
         `;
         
         const result = await this.ejecutarPythonRaw(script);
-        if (result.trim() === 'ERROR' || !result.trim() || result.trim() === '[]') {
+        
+        if (result.trim() === 'ERROR' || !result.trim() || result.trim().startsWith('ERROR:')) {
             return [];
         }
-        return JSON.parse(result.trim());
+        
+        try {
+            return JSON.parse(result.trim());
+        } catch (e) {
+            console.error('Error parseando JSON:', e);
+            return [];
+        }
     }
 
     async obtenerTarjetasCatastro(catastro, idEntidad) {
@@ -752,21 +922,31 @@ sys.path.insert(0, '.')
 from src.queries.query_router import load_queries, execute_query
 import json
 
-queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
-load_queries(queries)
+try:
+    queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
+    load_queries(queries)
 
-result = execute_query('tarjetas_por_catastro', {'catastro': '${catastro}', 'id_entidad': ${idEntidad}})
-if result.success and result.data:
-    print(json.dumps(result.data))
-else:
-    print('ERROR')
+    result = execute_query('tarjetas_por_catastro', {'catastro': '${catastro}', 'id_entidad': ${idEntidad}})
+    if result.success and result.data:
+        print(json.dumps(result.data))
+    else:
+        print('ERROR')
+except Exception as e:
+    print('ERROR:', str(e))
         `;
         
         const result = await this.ejecutarPythonRaw(script);
-        if (result.trim() === 'ERROR' || !result.trim() || result.trim() === '[]') {
+        
+        if (result.trim() === 'ERROR' || !result.trim() || result.trim().startsWith('ERROR:')) {
             return [];
         }
-        return JSON.parse(result.trim());
+        
+        try {
+            return JSON.parse(result.trim());
+        } catch (e) {
+            console.error('Error parseando JSON:', e);
+            return [];
+        }
     }
 
     async ejecutarPython(queryId, params) {
@@ -781,14 +961,17 @@ sys.path.insert(0, '.')
 from src.queries.query_router import load_queries, execute_query
 import json
 
-queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
-load_queries(queries)
+try:
+    queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
+    load_queries(queries)
 
-result = execute_query('${queryId}', {${paramsStr}})
-if result.success:
-    print(result.formatted_output)
-else:
-    print(f'ERROR: {result.error}')
+    result = execute_query('${queryId}', {${paramsStr}})
+    if result.success:
+        print(result.formatted_output)
+    else:
+        print(f'ERROR: {result.error}')
+except Exception as e:
+    print(f'ERROR: {str(e)}')
             `;
 
             const proceso = spawn('python', ['-c', script], { cwd: process.cwd() });
@@ -803,12 +986,15 @@ else:
                 if (code === 0) {
                     resolve(stdout.trim());
                 } else {
-                    console.error('Python error:', stderr);
+                    console.error('Error en query:', stderr);
                     resolve('ERROR: Error al ejecutar la consulta.');
                 }
             });
 
-            proceso.on('error', reject);
+            proceso.on('error', (err) => {
+                console.error(`[${new Date().toLocaleTimeString()}] Error al ejecutar Python:`, err);
+                reject(err);
+            });
         });
     }
 
@@ -817,14 +1003,22 @@ else:
             const proceso = spawn('python', ['-c', script], { cwd: process.cwd() });
 
             let stdout = '';
+            let stderr = '';
 
             proceso.stdout.on('data', (data) => { stdout += data.toString(); });
+            proceso.stderr.on('data', (data) => { stderr += data.toString(); });
 
-            proceso.on('close', () => {
+            proceso.on('close', (code) => {
+                if (code !== 0 && stderr) {
+                    console.error(`[${new Date().toLocaleTimeString()}] Python stderr:`, stderr);
+                }
                 resolve(stdout.trim());
             });
 
-            proceso.on('error', reject);
+            proceso.on('error', (err) => {
+                console.error(`[${new Date().toLocaleTimeString()}] Error al ejecutar Python raw:`, err);
+                reject(err);
+            });
         });
     }
 

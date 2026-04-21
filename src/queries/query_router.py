@@ -102,7 +102,7 @@ def format_results(format_type: str, data: list[dict]) -> str:
             
             desc_short = descripcion
             
-            lines.append(f"• {desc_short}\n  💰 Q{total:,.2f} | 📅 Vence: {fecha}")
+            lines.append(f"- {desc_short}\n  Q{total:,.2f} | Vence: {fecha}")
         
         result = "\n".join(lines)
         
@@ -119,11 +119,11 @@ def format_results(format_type: str, data: list[dict]) -> str:
         total_cuentas = row.get('TOTAL_CUENTAS', 0) or 0
         total_adeudo = row.get('TOTAL_ADEUDO', 0) or 0
         
-        return f"""📊 *RESUMEN DE ADEUDO*
+        return f"""*RESUMEN DE ADEUDO*
 
 Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
 
-💰 *Total a pagar: Q{total_adeudo:,.2f}*
+*Total a pagar: Q{total_adeudo:,.2f}*
 
 ¿Deseas ver el detalle de estas cuentas?"""
     
@@ -231,7 +231,7 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
             fecha = format_date(row.get('FECHA_MAX_PAGO') or row.get('FECHA_PAGO'))
             lineas.append(f"• {desc}: Q{monto + iva:,.2f} (Vence: {fecha})")
         
-        return "📋 *DETALLE DE CUENTAS*\n\n" + "\n\n".join(lineas) + f"\n\n💵 *TOTAL: Q{total:,.2f}*"
+        return "*DETALLE DE CUENTAS*\n\n" + "\n\n".join(lineas) + f"\n\n*TOTAL: Q{total:,.2f}*"
     
     elif format_type == "json":
         import json
