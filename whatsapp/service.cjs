@@ -12,6 +12,10 @@ class WhatsAppService {
         this.userState = {};
     }
     
+    enviarConCodigo(msg, texto) {
+        return msg.reply("```\n" + texto + "\n```");
+    }
+    
     verificarTimeout(from) {
         const estado = this.userState[from];
         if (!estado || !estado.ultimaActividad) return false;
@@ -115,7 +119,7 @@ class WhatsAppService {
         if (this.verificarTimeout(from)) {
             this.userState[from] = { primer_mensaje: true, ultimaActividad: Date.now() };
             await this.enviarBienvenida(msg);
-            await msg.reply('Tu sesión ha expirado y se ha cerrado por inactividad.\n\nPero no te preocupes, podemos comenzar de nuevo! :)');
+            this.enviarConCodigo(msg, 'Tu sesión ha expirado y se ha cerrado por inactividad.\n\nPero no te preocupes, podemos comenzar de nuevo! :)');
             return;
         }
         
@@ -143,7 +147,7 @@ class WhatsAppService {
                 await this.enviarDepartamentos(msg);
             } catch (error) {
                 console.error('Error al enviar departamentos:', error);
-                await msg.reply('Lo siento, hubo un error al cargar los departamentos. Intenta nuevamente.');
+                this.enviarConCodigo('Lo siento, hubo un error al cargar los departamentos. Intenta nuevamente.');
             }
             return;
         }
@@ -156,7 +160,7 @@ class WhatsAppService {
 
         if (text === 'X' || text === 'SALIR' || text === 'SALIDA') {
             delete this.userState[from];
-            await msg.reply('Hasta luego!');
+            this.enviarConCodigo('Hasta luego!');
             return;
         }
 
@@ -165,7 +169,7 @@ class WhatsAppService {
             const deptos = await this.obtenerDepartamentos();
             
             if (isNaN(num) || num < 1 || num > deptos.length) {
-                await msg.reply('Numero no valido. Selecciona el departamento:');
+                this.enviarConCodigo('Numero no valido. Selecciona el departamento:');
                 return;
             }
             
@@ -183,7 +187,7 @@ class WhatsAppService {
             const num = parseInt(text);
             
             if (isNaN(num) || num < 1 || num > estado.entidades.length) {
-                await msg.reply('Numero no valido. Selecciona la entidad:');
+                this.enviarConCodigo('Numero no valido. Selecciona la entidad:');
                 return;
             }
             
@@ -198,7 +202,7 @@ class WhatsAppService {
 
         if (!estado.tipoBusqueda) {
             if (!['1', '2', '3'].includes(text)) {
-                await msg.reply('Opcion no valida. Selecciona el tipo de busqueda:');
+                this.enviarConCodigo('Opcion no valida. Selecciona el tipo de busqueda:');
                 return;
             }
             
@@ -211,7 +215,7 @@ class WhatsAppService {
             this.userState[from].tipoBusqueda = tipos[text].tipo;
             this.userState[from].promptBusqueda = tipos[text].prompt;
             
-            await msg.reply(`Has elegido: Buscar por ${tipos[text].tipo}\n\n${tipos[text].prompt}\n(Escribe X para reiniciar)`);
+            this.enviarConCodigo(msg, `Has elegido: Buscar por ${tipos[text].tipo}\n\n${tipos[text].prompt}\n(Escribe X para reiniciar)`);
             return;
         }
 
@@ -227,7 +231,7 @@ class WhatsAppService {
                     await this.enviarMenu(msg, from);
                 }
             } else {
-                await msg.reply(`${estado.promptBusqueda}\n(Debe tener al menos 3 caracteres)`);
+                this.enviarConCodigo(`${estado.promptBusqueda}\n(Debe tener al menos 3 caracteres)`);
             }
             return;
         }
@@ -240,7 +244,7 @@ class WhatsAppService {
             
             const num = parseInt(text);
             if (isNaN(num) || num < 1 || num > estado.catastros.length) {
-                await msg.reply('Numero no valido. Selecciona el catastro:');
+                this.enviarConCodigo('Numero no valido. Selecciona el catastro:');
                 return;
             }
             
@@ -258,7 +262,7 @@ class WhatsAppService {
             
             const num = parseInt(text);
             if (isNaN(num) || num < 1 || num > estado.tarjetasCatastro.length) {
-                await msg.reply('Numero no valido. Selecciona la tarjeta:');
+                this.enviarConCodigo('Numero no valido. Selecciona la tarjeta:');
                 return;
             }
             
@@ -284,10 +288,10 @@ class WhatsAppService {
                 return;
             } else if (text === 'N' || text === 'X') {
                 delete this.userState[from];
-                await msg.reply('Gracias por usar el servicio. Hasta luego!');
+                this.enviarConCodigo('Gracias por usar el servicio. Hasta luego!');
                 return;
             } else {
-                await msg.reply('Opcion no valida. Escribe S para ver detalle o N para salir.');
+                this.enviarConCodigo('Opcion no valida. Escribe S para ver detalle o N para salir.');
                 return;
             }
         }
@@ -305,7 +309,7 @@ class WhatsAppService {
                 return;
             }
             
-            await msg.reply('Opcion no valida.\nEscribe 0 para reiniciar.');
+            this.enviarConCodigo('Opcion no valida.\nEscribe 0 para reiniciar.');
             return;
         }
 
@@ -332,7 +336,7 @@ class WhatsAppService {
             } else {
                 const num = parseInt(text);
                 if (isNaN(num) || num < 1 || num > estado.tarjetasCatastro.length) {
-                    await msg.reply('Numero no valido. Selecciona la tarjeta:');
+                    this.enviarConCodigo('Numero no valido. Selecciona la tarjeta:');
                     return;
                 }
                 // Guardar la tarjeta seleccionada y cambiar el tipo para el detalle
@@ -345,7 +349,7 @@ class WhatsAppService {
             return;
         }
 
-        await msg.reply('Opcion no valida.\nEscribe 0 para reiniciar.');
+        this.enviarConCodigo('Opcion no valida.\nEscribe 0 para reiniciar.');
     }
 
     getOpcionesConsulta(tipo, catastro) {
@@ -386,7 +390,7 @@ async enviarDepartamentos(msg) {
             const deptos = await this.obtenerDepartamentos();
             
             if (!deptos || deptos.length === 0) {
-                await msg.reply('Error: No se pudieron cargar los departamentos. Intenta nuevamente.');
+                this.enviarConCodigo('Error: No se pudieron cargar los departamentos. Intenta nuevamente.');
                 return;
             }
             
@@ -396,10 +400,10 @@ async enviarDepartamentos(msg) {
             });
             mensaje += '\nEscribe el numero';
             
-            await msg.reply(mensaje);
+            await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
             console.error('Error en enviarDepartamentos:', error);
-            await msg.reply('Error al cargar departamentos. Por favor intenta nuevamente.');
+            this.enviarConCodigo('Error al cargar departamentos. Por favor intenta nuevamente.');
         }
 }
 
@@ -435,7 +439,7 @@ Para comenzar, escribe cualquier texto o numero para iniciar la consulta.
 Escribe 0 en cualquier momento para reiniciar.
 Escribe X para salir.`;
         
-        await msg.reply(mensaje);
+        await this.enviarConCodigo(msg, mensaje);
         
         // Iniciar flujo normal
         this.userState[msg.from] = {};
@@ -448,7 +452,7 @@ Escribe X para salir.`;
             const entidades = await this.obtenerEntidades(estado.departamento);
             
             if (!entidades || entidades.length === 0) {
-                await msg.reply('No hay entidades en este departamento.\n\nSelecciona otro departamento:');
+                this.enviarConCodigo('No hay entidades en este departamento.\n\nSelecciona otro departamento:');
                 delete this.userState[from];
                 await this.enviarDepartamentos(msg);
                 return;
@@ -462,17 +466,17 @@ Escribe X para salir.`;
             });
             mensaje += '\nEscribe el numero';
             
-            await msg.reply(mensaje);
+            await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
             console.error('Error:', error);
-            await msg.reply('Error al cargar entidades.');
+            this.enviarConCodigo('Error al cargar entidades.');
         }
     }
 
     async enviarTipoBusqueda(msg) {
         const mensaje = `ENTIDAD: ${this.userState[msg.from].entidadNombre}\n\nPaso 3: Selecciona el TIPO DE BUSQUEDA\n\n1. Por TARJETA\n   (Buscar directamente por numero de tarjeta)\n\n2. Por CATASTRO\n   (Un catastro puede tener varias tarjetas)\n\n3. Por CONTRIBYENTE (DPI)\n   (Un contribuyente puede tener varios catastros)\n\n\nEscribe el numero (1, 2 o 3)`;
         
-        await msg.reply(mensaje);
+        await this.enviarConCodigo(msg, mensaje);
     }
 
     async buscarContribuyente(msg, from) {
@@ -482,7 +486,7 @@ Escribe X para salir.`;
             const catastros = await this.obtenerCatastrosContribuyente(estado.identificador, estado.departamento);
             
             if (!catastros || catastros.length === 0) {
-                await msg.reply(`No se encontraron catastros para el DPI: ${estado.identificador}\n\nEscribe otro DPI o 0 para reiniciar.`);
+this.enviarConCodigo(msg, `Has elegido: Buscar por ${tipos[text].tipo}\n\n${tipos[text].prompt}\n(Escribe X para reiniciar)`);
                 delete this.userState[from].identificador;
                 return;
             }
@@ -500,10 +504,10 @@ Escribe X para salir.`;
             });
             mensaje += `T. Ver todas las tarjetas (T)\n\nEscribe el numero del catastro para ver sus cuentas, o T para ver todas:`;
             
-            await msg.reply(mensaje);
+            await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
             console.error('Error:', error);
-            await msg.reply('Error al buscar contribuyente.');
+            this.enviarConCodigo('Error al buscar contribuyente.');
         }
     }
 
@@ -514,7 +518,7 @@ Escribe X para salir.`;
             const tarjetas = await this.obtenerTarjetasCatastro(estado.identificador, estado.entidadId);
             
             if (!tarjetas || tarjetas.length === 0) {
-                await msg.reply(`No se encontraron tarjetas para el catastro: ${estado.identificador}\n\nEscribe otro catastro o 0 para reiniciar.`);
+                this.enviarConCodigo(`No se encontraron tarjetas para el catastro: ${estado.identificador}\n\nEscribe otro catastro o 0 para reiniciar.`);
                 delete this.userState[from].identificador;
                 return;
             }
@@ -530,11 +534,11 @@ Escribe X para salir.`;
             });
             mensaje += `\nT. Ver todas las cuentas del catastro (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver el resumen completo del catastro:`;
             
-            await msg.reply(mensaje);
+            await this.enviarConCodigo(msg, mensaje);
             this.userState[from].esperandoTarjeta = true;
         } catch (error) {
             console.error('Error:', error);
-            await msg.reply('Error al buscar tarjetas del catastro.');
+            this.enviarConCodigo('Error al buscar tarjetas del catastro.');
         }
     }
 
@@ -572,7 +576,7 @@ Paso 4: Selecciona la consulta:
 0. Reiniciar
 X. Salir`;
         
-        await msg.reply(mensaje);
+        await this.enviarConCodigo(msg, mensaje);
     }
 
     async pedirSeleccionTarjetaDetalle(msg, from) {
@@ -588,7 +592,7 @@ X. Salir`;
         });
         mensaje += `\nT. Ver todas las tarjetas\n\nEscribe el numero de la tarjeta:`;
         
-        await msg.reply(mensaje);
+        await this.enviarConCodigo(msg, mensaje);
         this.userState[from].solicitandoDetalleTarjeta = true;
     }
 
@@ -600,7 +604,7 @@ X. Salir`;
         mensaje += `Escribe S para ver el detalle.\n`;
         mensaje += `Escribe N o X para salir.`;
         
-        await msg.reply(mensaje);
+        await this.enviarConCodigo(msg, mensaje);
         this.userState[from].esperandoDetalle = true;
     }
 
@@ -634,13 +638,13 @@ X. Salir`;
             }
             
             if (respuesta.startsWith('ERROR')) {
-                await msg.reply(header + respuesta.replace('ERROR: ', ''));
+                await this.enviarConCodigo(msg, respuesta.replace('ERROR: ', ''));
             } else {
-                await msg.reply(header + respuesta);
+                this.enviarConCodigo(msg, header + respuesta);
             }
         } catch (error) {
             console.error('Error:', error);
-            await msg.reply('Error al procesar la consulta.');
+            this.enviarConCodigo('Error al procesar la consulta.');
         }
         
         delete this.userState[from];
@@ -676,14 +680,14 @@ X. Salir`;
             header += `${tipoInfo}\n\n`;
             
             if (respuesta.startsWith('ERROR')) {
-                await msg.reply(header + respuesta.replace('ERROR: ', ''));
+                await this.enviarConCodigo(msg, respuesta.replace('ERROR: ', ''));
                 delete this.userState[from];
             } else if (respuesta.includes('No se encontraron')) {
-                await msg.reply(header + respuesta);
+                this.enviarConCodigo(msg, header + respuesta);
                 delete this.userState[from];
             } else {
                 // MOSTRAR el resumen (ya incluye "¿Deseas ver el detalle? (S/N)")
-                await msg.reply(header + respuesta);
+                this.enviarConCodigo(msg, header + respuesta);
                 
                 // Solo establecer flag para esperar respuesta S/N
                 // NO enviar otro mensaje - el formateador ya incluye la pregunta
@@ -691,7 +695,7 @@ X. Salir`;
             }
         } catch (error) {
             console.error('Error:', error);
-            await msg.reply('Error al procesar la consulta.');
+            this.enviarConCodigo('Error al procesar la consulta.');
             delete this.userState[from];
         }
     }
@@ -747,13 +751,13 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             }
             
             if (respuesta.startsWith('ERROR')) {
-                await msg.reply(header + respuesta.replace('ERROR: ', ''));
+                await this.enviarConCodigo(msg, respuesta.replace('ERROR: ', ''));
             } else {
-                await msg.reply(header + respuesta);
+                this.enviarConCodigo(msg, header + respuesta);
             }
         } catch (error) {
             console.error('Error:', error);
-            await msg.reply('Error al procesar la consulta.');
+            this.enviarConCodigo('Error al procesar la consulta.');
         }
         
         delete this.userState[from];
@@ -776,15 +780,15 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             header += `\nID: ${estado.identificador}\n\n`;
             
             if (respuesta.startsWith('ERROR')) {
-                await msg.reply(header + respuesta.replace('ERROR: ', ''));
+                await this.enviarConCodigo(msg, respuesta.replace('ERROR: ', ''));
             } else if (respuesta.includes('No se encontraron')) {
-                await msg.reply(header + respuesta);
+                this.enviarConCodigo(msg, header + respuesta);
             } else {
-                await msg.reply(header + respuesta);
+                this.enviarConCodigo(msg, header + respuesta);
             }
         } catch (error) {
             console.error('Error:', error);
-            await msg.reply('Error al procesar la consulta.');
+            this.enviarConCodigo('Error al procesar la consulta.');
         }
         
         delete this.userState[from];
