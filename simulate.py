@@ -299,8 +299,8 @@ class SimuladorBot:
                 catastro = t.get('CATASTRO', catastro)
                 nombre = f"{t.get('NOMBRE', '')} {t.get('APELLIDO_PATERNO', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
                 print(f"{i}. {nombre} - {catastro}")
-                print()
             
+            print()
             print("T. Ver todas las cuentas del catastro (T)")
             print()
             print("Escribe el numero de tarjeta para ver sus cuentas, o T para ver el resumen completo del catastro:")
@@ -369,7 +369,7 @@ class SimuladorBot:
         }
         
         if self.estado.get('tipoBusqueda') == 'CATASTRO':
-            query_id = 'cta_pendiente_tarjeta_agrupado'
+            query_id = 'cta_pendiente_catastro'
             params = {
                 'identificador': self.estado['identificador'],
                 'id_entidad': self.estado['entidad']
@@ -377,13 +377,13 @@ class SimuladorBot:
         elif self.estado.get('tipoBusqueda') == 'TARJETA':
             query_id = 'cta_pendiente_tarjeta'
             params = {
-                'identificador': self.estado['identificador'],
+                'identificador': self.estado.get('tarjetaSeleccionada'),
                 'id_entidad': self.estado['entidad']
             }
         elif self.estado.get('tipoBusqueda') == 'TARJETA_CATASTRO':
             query_id = 'cta_pendiente_tarjeta'
             params = {
-                'identificador': self.estado['identificador'],
+                'identificador': self.estado.get('tarjetaSeleccionada'),
                 'id_entidad': self.estado['entidad']
             }
         elif self.estado.get('tipoBusqueda') == 'CONTRIBUYENTE':
@@ -407,8 +407,8 @@ class SimuladorBot:
             header += f"Entidad: {self.estado.get('entidadNombre')}\n"
             
             tipo = self.estado.get('tipoBusqueda')
-            if tipo == 'TARJETA':
-                header += f"Tarjeta: {self.estado.get('identificador')}"
+            if tipo == 'TARJETA' or tipo == 'TARJETA_CATASTRO':
+                header += f"Tarjeta: {self.estado.get('tarjetaSeleccionada')}"
             elif tipo == 'CATASTRO':
                 header += f"Catastro: {self.estado.get('identificador')}"
             elif tipo == 'TARJETA_CATASTRO':
@@ -468,22 +468,22 @@ class SimuladorBot:
                 'dpi': self.estado['identificador'],
                 'id_entidad': self.estado['entidad']
             }
-        elif tipo_detalle == 'T' or tipo == 'CATASTRO':
+        elif tipo == 'CATASTRO':
             query_id = 'cta_pendiente_detalle'
             params = {
                 'identificador': self.estado['identificador'],
                 'id_entidad': self.estado['entidad']
             }
         elif tipo == 'TARJETA_CATASTRO':
-            query_id = 'cta_pendiente_detalle'
+            query_id = 'cta_pendiente_detalle_tarjeta'
             params = {
-                'identificador': self.estado['identificador'],
+                'id_tarjeta': self.estado.get('tarjetaId'),
                 'id_entidad': self.estado['entidad']
             }
         elif tipo == 'TARJETA' or tipo_detalle == 'TARJETA':
-            query_id = 'cta_pendiente_detalle'
+            query_id = 'cta_pendiente_detalle_tarjeta'
             params = {
-                'identificador': self.estado['identificador'],
+                'id_tarjeta': self.estado.get('tarjetaId'),
                 'id_entidad': self.estado['entidad']
             }
         else:
@@ -502,10 +502,8 @@ class SimuladorBot:
         
         if result.success:
             header = f"DETALLE: Cuentas Pendientes\n"
-            if tipo == 'TARJETA_CATASTRO':
-                header += f"Catastro: {self.estado.get('identificador')} - Tarjeta: {self.estado.get('tarjetaSeleccionada')}\n"
-            elif tipo == 'TARJETA':
-                header += f"Tarjeta: {self.estado.get('identificador')}\n"
+            if tipo == 'TARJETA' or tipo == 'TARJETA_CATASTRO':
+                header += f"Tarjeta: {self.estado.get('tarjetaSeleccionada')}\n"
             
             print(header)
             print(result.formatted_output)
