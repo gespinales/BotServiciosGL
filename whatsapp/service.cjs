@@ -356,11 +356,11 @@ class WhatsAppService {
                 sufijo: 'pendiente',
                 nombre: 'Cuentas Pendientes',
                 queries: {
-                    // Exactamente igual que simulate.py - siempre usar cta_pendiente_detalle
-                    'CONTRIBUYENTE': { resumen: 'cta_pendiente_contribuyente', detalle: 'cta_pendiente_detalle' },
-                    'CATASTRO': { resumen: 'cta_pendiente_tarjeta_agrupado', detalle: 'cta_pendiente_detalle' },
-                    'TARJETA_CATASTRO': { resumen: 'cta_pendiente_tarjeta_agrupado', detalle: 'cta_pendiente_detalle' },
-                    'TARJETA': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle' }
+// Exactamente igual que simulate.py
+                'CONTRIBUYENTE': { resumen: 'cta_pendiente_contribuyente', detalle: 'cta_pendiente_detalle_contribuyente' },
+                'CATASTRO': { resumen: 'cta_pendiente_catastro', detalle: 'cta_pendiente_detalle' },
+                'TARJETA_CATASTRO': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle_tarjeta' },
+                'TARJETA': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle_tarjeta' }
                 }
             }
         };
@@ -550,8 +550,7 @@ Escribe X para salir.`;
         } else if (tipo === 'CATASTRO') {
             idMostrar = `Catastro: ${estado.identificador}`;
         } else if (tipo === 'TARJETA_CATASTRO') {
-            // - Tarjeta: debe ser el IDENTIFICADOR (CATASTRO de servicio_catastro), no el nombre
-            idMostrar = `Catastro: ${estado.identificador} - Tarjeta: ${estado.tarjetaSeleccionada || ''}`;
+            idMostrar = `Tarjeta: ${estado.tarjetaSeleccionada || ''}`;
         } else if (tipo === 'CONTRIBUYENTE') {
             let nombre = estado.contribuyenteNombre || estado.identificador;
             let catastro = estado.catastroSeleccionado || '';
@@ -609,19 +608,30 @@ X. Salir`;
         const estado = this.userState[from];
         
         try {
-            // Usar 'identificador' igual que simulate.py - usar cta_pendiente_detalle
-            const params = {
-                identificador: estado.identificador,
-                id_entidad: estado.entidadId
-            };
+            let params, queryId;
             
-            const respuesta = await this.ejecutarPython(
-                'cta_pendiente_detalle', 
-                params
-            );
+            if (estado.tipoBusqueda === 'TARJETA' || estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                params = {
+                    id_tarjeta: estado.tarjetaId,
+                    id_entidad: estado.entidadId
+                };
+                queryId = 'cta_pendiente_detalle_tarjeta';
+            } else {
+                params = {
+                    identificador: estado.identificador,
+                    id_entidad: estado.entidadId
+                };
+                queryId = 'cta_pendiente_detalle';
+            }
+            
+            const respuesta = await this.ejecutarPython(queryId, params);
             
             let header = `DETALLE: ${estado.queryName}\n`;
-            header += `Catastro: ${estado.identificador} - Tarjeta: ${estado.tarjetaSeleccionada}\n\n`;
+            if (estado.tipoBusqueda === 'TARJETA' || estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                header += `Tarjeta: ${estado.tarjetaSeleccionada}\n\n`;
+            } else {
+                header += `Catastro: ${estado.identificador}\n\n`;
+            }
             
             if (respuesta.startsWith('ERROR')) {
                 await msg.reply(header + respuesta.replace('ERROR: ', ''));
@@ -652,9 +662,8 @@ X. Salir`;
             header += `Depto: ${estado.deptoNombre} | Entidad: ${estado.entidadNombre}\n`;
             
             let tipoInfo = estado.tipoBusqueda;
-            if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
-                // - Tarjeta: debe ser el IDENTIFICADOR (CATASTRO), no el nombre
-                tipoInfo = `Catastro: ${estado.identificador} - Tarjeta: ${estado.tarjetaSeleccionada || ''}`;
+            if (estado.tipoBusqueda === 'TARJETA' || estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                tipoInfo = `Tarjeta: ${estado.tarjetaSeleccionada || estado.identificador}`;
             } else if (estado.tipoBusqueda === 'CONTRIBUYENTE' && estado.catastroSeleccionado) {
                 let nombre = estado.contribuyenteNombre || estado.identificador;
                 tipoInfo = `Contribuyente: ${nombre} - Catastro: ${estado.catastroSeleccionado}`;
@@ -695,27 +704,24 @@ X. Salir`;
             let queryId = estado.queryDetalle;
             
             // Exactamente igual que simulate.py
-            if (estado.tipoBusqueda === 'CATASTRO') {
-                // Detail por catastro
+if (estado.tipoBusqueda === 'CATASTRO') {
                 params = {
                     identificador: estado.identificador,
                     id_entidad: estado.entidadId
                 };
                 queryId = 'cta_pendiente_detalle';
             } else if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
-                // Exactamente igual que simulate.py - usar identificador
                 params = {
-                    identificador: estado.identificador,
+                    id_tarjeta: estado.tarjetaId,
                     id_entidad: estado.entidadId
                 };
-                queryId = 'cta_pendiente_detalle';
+                queryId = 'cta_pendiente_detalle_tarjeta';
             } else if (estado.tipoBusqueda === 'TARJETA') {
-                // Exactamente igual que simulate.py - usar identificador
                 params = {
-                    identificador: estado.identificador,
+                    id_tarjeta: estado.tarjetaId,
                     id_entidad: estado.entidadId
                 };
-                queryId = 'cta_pendiente_detalle';
+                queryId = 'cta_pendiente_detalle_tarjeta';
             } else if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
                 params = {
                     dpi: estado.identificador,
@@ -730,10 +736,8 @@ X. Salir`;
             
             // Formato igual que simulate.py
             let header = `DETALLE: ${estado.queryName}\n`;
-            if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
-                header += `Catastro: ${estado.identificador} - Tarjeta: ${estado.tarjetaSeleccionada || ''}\n`;
-            } else if (estado.tipoBusqueda === 'TARJETA') {
-                header += `Tarjeta: ${estado.identificador}\n`;
+            if (estado.tipoBusqueda === 'TARJETA' || estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                header += `Tarjeta: ${estado.tarjetaSeleccionada || ''}\n`;
             } else if (estado.tipoBusqueda === 'CATASTRO') {
                 header += `Catastro: ${estado.identificador}\n`;
             } else if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
@@ -787,7 +791,7 @@ X. Salir`;
     }
 
     getQueryParams(estado) {
-        // Exactamente igual que simulate.py - usar 'identificador' para todas las queries
+        // Exactamente igual que simulate.py
         if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
             return {
                 dpi: estado.identificador,
@@ -799,15 +803,13 @@ X. Salir`;
                 id_entidad: estado.entidadId
             };
         } else if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
-            // Para TARJETA_CATASTRO también usa 'identificador' (el catastro)
             return {
-                identificador: estado.identificador,
+                identificador: estado.tarjetaSeleccionada,
                 id_entidad: estado.entidadId
             };
         } else {
-            // Para TARJETA también usa 'identificador'
             return {
-                identificador: estado.identificador,
+                identificador: estado.tarjetaSeleccionada || estado.identificador,
                 id_entidad: estado.entidadId
             };
         }
