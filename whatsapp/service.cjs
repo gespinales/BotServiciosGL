@@ -526,9 +526,9 @@ Escribe X para salir.`;
                 // Formato igual que simulate.py: nombre completo + identificador de catastro
                 const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
                 const catastroIdent = t.CATASTRO || estado.identificador;
-                mensaje += `${i + 1}. ${nombre} - ${catastroIdent}\n\n`;
+                mensaje += `${i + 1}. ${nombre} - ${catastroIdent}\n`;
             });
-            mensaje += `T. Ver todas las cuentas del catastro (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver el resumen completo del catastro:`;
+            mensaje += `\nT. Ver todas las cuentas del catastro (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver el resumen completo del catastro:`;
             
             await msg.reply(mensaje);
             this.userState[from].esperandoTarjeta = true;
