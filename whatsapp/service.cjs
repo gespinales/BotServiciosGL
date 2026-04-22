@@ -659,7 +659,7 @@ X. Salir`;
             
             // Formato igual que simulate.py
             let header = `${estado.queryName}\n`;
-            header += `Depto: ${estado.deptoNombre} | Entidad: ${estado.entidadNombre}\n`;
+            header += `Departamento: ${estado.deptoNombre}\nEntidad: ${estado.entidadNombre}\n`;
             
             let tipoInfo = estado.tipoBusqueda;
             if (estado.tipoBusqueda === 'TARJETA' || estado.tipoBusqueda === 'TARJETA_CATASTRO') {
@@ -768,7 +768,7 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             const respuesta = await this.ejecutarPython(estado.queryType, params);
             
             let header = `${estado.queryName}\n`;
-            header += `Depto: ${estado.deptoNombre} | Entidad: ${estado.entidadNombre}\n`;
+            header += `Departamento: ${estado.deptoNombre}\nEntidad: ${estado.entidadNombre}\n`;
             header += `Tipo: ${estado.tipoBusqueda}`;
             if (estado.catastroSeleccionado) {
                 header += ` > ${estado.catastroSeleccionado}`;

@@ -184,23 +184,25 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
             })
             tarjetas_data[id_tarjeta]['total'] += monto + iva
         
-        resultado = "DETALLE POR TARJETA\n\n"
+        resultado = "```\nDETALLE POR TARJETA\n\n"
         limite_por_tarjeta = 10
         
         for id_tarjeta, datos in sorted(tarjetas_data.items()):
-            resultado += f"==============================\n"
+            resultado += "=" * 28 + "\n"
             resultado += f">>> TARJETA: {id_tarjeta} - {datos['nombre']}\n"
             resultado += f"   {len(datos['cuentas'])} cuentas - Q{datos['total']:,.2f}\n"
-            resultado += f"==============================\n"
+            resultado += "=" * 28 + "\n"
             
             cuentas_mostrar = datos['cuentas'][:limite_por_tarjeta]
             for c in cuentas_mostrar:
                 resultado += f"- {c['desc']}: Q{c['monto']:,.2f} (Vence: {c['fecha']})\n"
             
             if len(datos['cuentas']) > limite_por_tarjeta:
-                resultado += f"\n... y {len(datos['cuentas']) - limite_por_tarjeta} cuentas mas en esta tarjeta\n"
+                resultado += f"\n... y {len(datos['cuentas']) - limite_por_tarjeta} cuentas mas\n"
             
             resultado += "\n"
+        
+        resultado += "```"
         
         return resultado.strip()
     
@@ -231,7 +233,7 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
             fecha = format_date(row.get('FECHA_MAX_PAGO') or row.get('FECHA_PAGO'))
             lineas.append(f"- {desc}: Q{monto + iva:,.2f} (Vence: {fecha})")
         
-        return "*DETALLE DE CUENTAS*" + "\n" + "\n".join(lineas) + "\n\n*TOTAL: Q" + f"{total:,.2f}*"
+        return "```\n*DETALLE DE CUENTAS*\n\n" + "\n".join(lineas) + "\n\n*TOTAL: Q" + f"{total:,.2f}*\n```"
     
     elif format_type == "json":
         import json
