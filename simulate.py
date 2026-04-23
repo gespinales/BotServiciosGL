@@ -663,7 +663,6 @@ class SimuladorBot:
             return False
         
         print(f"Cuentas encontradas: {len(cuentas)}")
-        print(f"IDs: {cuentas}")
         
         print("\nGenerando documento de cobro...")
         resultado = documento_client.generar_documento_cobro(

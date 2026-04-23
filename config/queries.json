@@ -272,6 +272,13 @@
     "params": ["dpi"]
   },
   {
+    "id": "cuentas_corrientes_pendientes",
+    "description": "Obtener IDs de cuentas corrientes pendientes por ID_TARJETA",
+    "sql": "SELECT cc.ID_CUENTA_CORRIENTE FROM CUENTA_CORRIENTE cc WHERE cc.ID_CONTRIBUYENTE_SERVICIO = :id_tarjeta AND cc.ID_ENTIDAD = :id_entidad AND cc.ESTADO = 'POR_PAGAR'",
+    "format": "json",
+    "params": ["id_tarjeta", "id_entidad"]
+  },
+  {
     "id": "cuentas_corrientes_pendientes_contribuyente",
     "description": "Obtener IDs de cuentas corrientes pendientes por DPI de contribuyente",
     "sql": "SELECT DISTINCT cc.ID_CUENTA_CORRIENTE FROM CUENTA_CORRIENTE cc JOIN CONTRIBUYENTE_SERVICIO cs ON cc.ID_CONTRIBUYENTE_SERVICIO = cs.ID_CONTRIBUYENTE_SERVICIO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE cg.DPI = :dpi AND cc.ID_ENTIDAD = :id_entidad AND cc.ESTADO = 'POR_PAGAR'",
