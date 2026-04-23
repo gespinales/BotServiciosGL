@@ -397,5 +397,15 @@ Tienes {total_cuentas:,} cuenta(s) pendiente(s) de pago.
         
         return resultado
     
+    elif format_type == "simple":
+        if not data:
+            return None
+        return str(data[0].get('ID_CONTRIBUYENTE'))
+    
+    elif format_type == "simple_list":
+        if not data:
+            return []
+        return [str(row.get('ID_CUENTA_CORRIENTE')) for row in data]
+    
     else:
         return str(data)

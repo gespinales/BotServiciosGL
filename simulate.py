@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.queries.query_router import load_queries, execute_query
+from src.services.documento_cobro_client import documento_client
 
 load_queries(json.load(open('config/queries.json', 'r', encoding='utf-8')))
 
@@ -75,8 +76,9 @@ class SimuladorBot:
         print()
         print("Soy el asistente de consultas de Cuenta Corriente.")
         print()
-        print("Puedo ayudarte a consultar:")
-        print("- Cuentas pendientes")
+        print("Puedo ayudarte con las siguientes operaciones:")
+        print("- Consultar cuentas pendientes")
+        print("- Generar documento de cobro")
         print()
         print("Para comenzar, escribe cualquier texto o numero para iniciar la consulta.")
         print()
@@ -313,10 +315,12 @@ class SimuladorBot:
             if opcion == 'T':
                 self.estado['tarjetaSeleccionada'] = 'TODAS'
                 self.estado['tipoBusqueda'] = 'CATASTRO'
+                self.estado['todasLasTarjetas'] = self.tarjetas
             else:
                 t = self.tarjetas[opcion - 1]
                 self.estado['tarjetaSeleccionada'] = t.get('CATASTRO', catastro)
                 self.estado['tarjetaId'] = t['ID_TARJETA']
+                self.estado['idServicioCatastro'] = t['ID_SERVICIO_CATASTRO']
                 nombre = f"{t.get('NOMBRE', '')} {t.get('APELLIDO_PATERNO', '')} {t.get('APELLIDO_MATERNO', '')}".strip()
                 self.estado['tarjetaNombre'] = nombre
                 self.estado['tipoBusqueda'] = 'TARJETA_CATASTRO'
@@ -353,13 +357,14 @@ class SimuladorBot:
         else:
             print(f"ID: {self.estado.get('identificador')}")
         print()
-        print("Paso 4: Selecciona la consulta:")
-        print("1. Cuentas Pendientes")
+        print("Paso 5: Selecciona la operación:")
+        print("1. Consultar cuentas pendientes")
+        print("2. Generar documento de cobro")
         print()
         print("0. Reiniciar")
         print("X. Salir")
         
-        return self._obtener_opcion(1, "consulta")
+        return self._obtener_opcion(2, "consulta")
     
     def ejecutar_resumen(self):
         query_id = 'cta_pendiente_tarjeta_agrupado'
@@ -387,12 +392,21 @@ class SimuladorBot:
                 'id_entidad': self.estado['entidad']
             }
         elif self.estado.get('tipoBusqueda') == 'CONTRIBUYENTE':
-            query_id = 'cta_pendiente_contribuyente'
             dpi = self.estado['identificador']
-            params = {
-                'dpi': dpi,
-                'id_entidad': self.estado['entidad']
-            }
+            catastro_seleccionado = self.estado.get('catastroSeleccionado')
+            if catastro_seleccionado and catastro_seleccionado != 'TODAS':
+                query_id = 'cta_pendiente_contribuyente_catastro'
+                params = {
+                    'dpi': dpi,
+                    'catastro': catastro_seleccionado,
+                    'id_entidad': self.estado['entidad']
+                }
+            else:
+                query_id = 'cta_pendiente_contribuyente'
+                params = {
+                    'dpi': dpi,
+                    'id_entidad': self.estado['entidad']
+                }
         
         result = execute_query(query_id, params)
         
@@ -512,6 +526,164 @@ class SimuladorBot:
         
         return result.success
     
+    def _obtener_id_contribuyente(self):
+        tipo = self.estado.get('tipoBusqueda')
+        id_entidad = self.estado['entidad']
+        
+        if tipo == 'CONTRIBUYENTE':
+            result = execute_query('id_contribuyente_por_dpi', {'dpi': self.estado['identificador']})
+            if result.success and result.data and result.data[0]:
+                return int(result.data[0]['ID_CONTRIBUYENTE'])
+        elif tipo == 'CATASTRO':
+            todas_tarjetas = self.estado.get('todasLasTarjetas')
+            if todas_tarjetas:
+                result = execute_query('id_contribuyente_por_tarjeta', {
+                    'id_servicio_catastro': todas_tarjetas[0]['ID_SERVICIO_CATASTRO']
+                })
+            else:
+                result = execute_query('id_contribuyente_por_catastro', {
+                    'catastro': self.estado['identificador'],
+                    'id_entidad': id_entidad
+                })
+            if result.success and result.data and result.data[0]:
+                return int(result.data[0]['ID_CONTRIBUYENTE'])
+        elif tipo == 'TARJETA_CATASTRO':
+            id_servicio_catastro = self.estado.get('idServicioCatastro')
+            result = execute_query('id_contribuyente_por_tarjeta', {
+                'id_servicio_catastro': id_servicio_catastro
+            })
+            if result.success and result.data and result.data[0]:
+                return int(result.data[0]['ID_CONTRIBUYENTE'])
+        elif tipo == 'TARJETA':
+            id_tarjeta = self.estado.get('tarjetaId')
+            result = execute_query('id_servicio_catastro_por_identificador', {
+                'id_tarjeta': id_tarjeta
+            })
+            if result.success and result.data and result.data[0]:
+                id_servicio_catastro = int(result.data[0]['ID_SERVICIO_CATASTRO'])
+                result = execute_query('id_contribuyente_por_tarjeta', {
+                    'id_servicio_catastro': id_servicio_catastro
+                })
+                if result.success and result.data and result.data[0]:
+                    return int(result.data[0]['ID_CONTRIBUYENTE'])
+        return None
+    
+    def _obtener_cuentas_corrientes(self):
+        tipo = self.estado.get('tipoBusqueda')
+        id_entidad = self.estado['entidad']
+        
+        if tipo == 'TARJETA_CATASTRO':
+            id_tarjeta = self.estado.get('tarjetaId')
+            result = execute_query('cuentas_corrientes_pendientes', {
+                'id_tarjeta': id_tarjeta,
+                'id_entidad': id_entidad
+            })
+            if result.success and result.data:
+                return [row['ID_CUENTA_CORRIENTE'] for row in result.data]
+            return []
+        elif tipo == 'TARJETA':
+            id_tarjeta = self.estado.get('tarjetaId')
+            result = execute_query('cuentas_corrientes_pendientes', {
+                'id_tarjeta': id_tarjeta,
+                'id_entidad': id_entidad
+            })
+            if result.success and result.data:
+                return [row['ID_CUENTA_CORRIENTE'] for row in result.data]
+            return []
+        elif tipo == 'CATASTRO':
+            todas_tarjetas = self.estado.get('todasLasTarjetas')
+            if todas_tarjetas:
+                result = execute_query('cuentas_corrientes_pendientes_catastro', {
+                    'catastro': self.estado['identificador'],
+                    'id_entidad': id_entidad
+                })
+                if result.success and result.data:
+                    return [row['ID_CUENTA_CORRIENTE'] for row in result.data]
+            else:
+                result = execute_query('tarjetas_por_catastro', {
+                    'catastro': self.estado['identificador'],
+                    'id_entidad': id_entidad
+                })
+                if result.success and result.data:
+                    id_tarjeta = result.data[0]['ID_TARJETA']
+                else:
+                    return []
+                result = execute_query('cuentas_corrientes_pendientes', {
+                    'id_tarjeta': id_tarjeta,
+                    'id_entidad': id_entidad
+                })
+                if result.success and result.data:
+                    return [row['ID_CUENTA_CORRIENTE'] for row in result.data]
+            return []
+        elif tipo == 'CONTRIBUYENTE':
+            catastro_seleccionado = self.estado.get('catastroSeleccionado')
+            if catastro_seleccionado and catastro_seleccionado != 'TODAS':
+                result = execute_query('cuentas_corrientes_pendientes_contribuyente_catastro', {
+                    'dpi': self.estado['identificador'],
+                    'catastro': catastro_seleccionado,
+                    'id_entidad': id_entidad
+                })
+            else:
+                result = execute_query('cuentas_corrientes_pendientes_contribuyente', {
+                    'dpi': self.estado['identificador'],
+                    'id_entidad': id_entidad
+                })
+            if result.success and result.data:
+                return [row['ID_CUENTA_CORRIENTE'] for row in result.data]
+            return []
+        else:
+            return []
+    
+    def generar_documento_cobro(self):
+        print("\n" + "=" * 60)
+        print("GENERAR DOCUMENTO DE COBRO")
+        print("=" * 60)
+        print()
+        
+        id_entidad = self.estado['entidad']
+        tipo = self.estado.get('tipoBusqueda')
+        
+        print(f"Entidad: {self.estado.get('entidadNombre')}")
+        print(f"Tipo de busqueda: {tipo}")
+        
+        print("\nObteniendo ID Contribuyente...")
+        id_contribuyente = self._obtener_id_contribuyente()
+        
+        if not id_contribuyente:
+            print("ERROR: No se pudo obtener el ID del contribuyente")
+            return False
+        
+        print(f"ID Contribuyente: {id_contribuyente}")
+        
+        print("\nObteniendo cuentas pendientes...")
+        cuentas = self._obtener_cuentas_corrientes()
+        
+        if not cuentas:
+            print("ERROR: No se encontraron cuentas pendientes")
+            return False
+        
+        print(f"Cuentas encontradas: {len(cuentas)}")
+        print(f"IDs: {cuentas}")
+        
+        print("\nGenerando documento de cobro...")
+        resultado = documento_client.generar_documento_cobro(
+            id_entidad=id_entidad,
+            id_contribuyente=id_contribuyente,
+            cuentas_corrientes=cuentas
+        )
+        
+        if resultado.get('success'):
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"documento_cobro_{timestamp}.pdf"
+            filepath = documento_client.guardar_pdf(resultado['pdf_bytes'], filename)
+            print(f"\nPDF generado exitosamente!")
+            print(f"Guardado en: {filepath}")
+            return True
+        else:
+            print(f"\nERROR al generar documento: {resultado.get('error')}")
+            return False
+    
     def run(self):
         print("\n" + "=" * 60)
         print("  SIMULADOR DE BOT DE WHATSAPP")
@@ -549,11 +721,30 @@ class SimuladorBot:
                 if self.mostrar_tarjetas_catastro(identificador) is None:
                     continue
             elif tipo == 'TARJETA':
-                self.estado['tarjetaSeleccionada'] = identificador
-                self.estado['tipoBusqueda'] = 'TARJETA'
+                result = execute_query('tarjeta_por_identificador', {
+                    'identificador': identificador,
+                    'id_entidad': self.estado['entidad']
+                })
+                if result.success and result.data:
+                    self.estado['tarjetaSeleccionada'] = identificador
+                    self.estado['tipoBusqueda'] = 'TARJETA'
+                    self.estado['tarjetaId'] = result.data[0]['ID_TARJETA']
+                    self.estado['idServicioCatastro'] = result.data[0]['ID_SERVICIO_CATASTRO']
+                else:
+                    print(f"No se encontro tarjeta con identificador: {identificador}")
+                    continue
             
             sel_consulta = self.paso_menu_consultas()
             if sel_consulta is None:
+                continue
+            
+            if sel_consulta == 2:
+                self.generar_documento_cobro()
+                input("\n>>> Presiona ENTER para nueva consulta...")
+                self.actualizar_timestamp()
+                print("\n" + "=" * 60)
+                print(">>> Nueva consulta...")
+                print("=" * 60)
                 continue
             
             self.ejecutar_resumen()

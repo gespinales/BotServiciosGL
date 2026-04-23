@@ -36,7 +36,7 @@
   {
     "id": "tarjetas_por_catastro",
     "description": "Lista de tarjetas de un catastro por entidad",
-    "sql": "SELECT sc.IDENTIFICADOR AS CATASTRO, cs.ID_CONTRIBUYENTE_SERVICIO AS ID_TARJETA, cg.NOMBRE, cg.APELLIDO_PATERNO, cg.APELLIDO_MATERNO FROM SERVICIO_CATASTRO sc JOIN CATASTRO c ON sc.ID_CATASTRO = c.ID_CATASTRO JOIN CONTRIBUYENTE_SERVICIO cs ON cs.ID_SERVICIO_CATASTRO = sc.ID_SERVICIO_CATASTRO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE c.CATASTRO = :catastro AND sc.ID_ENTIDAD = :id_entidad ORDER BY cg.NOMBRE",
+    "sql": "SELECT sc.IDENTIFICADOR AS CATASTRO, cs.ID_SERVICIO_CATASTRO AS ID_SERVICIO_CATASTRO, cs.ID_CONTRIBUYENTE_SERVICIO AS ID_TARJETA, cg.NOMBRE, cg.APELLIDO_PATERNO, cg.APELLIDO_MATERNO FROM SERVICIO_CATASTRO sc JOIN CATASTRO c ON sc.ID_CATASTRO = c.ID_CATASTRO JOIN CONTRIBUYENTE_SERVICIO cs ON cs.ID_SERVICIO_CATASTRO = sc.ID_SERVICIO_CATASTRO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE c.CATASTRO = :catastro AND sc.ID_ENTIDAD = :id_entidad ORDER BY cg.NOMBRE",
     "format": "menu",
     "params": ["catastro", "id_entidad"]
   },
@@ -235,5 +235,75 @@
     "sql": "SELECT COUNT(*) AS TOTAL_CUENTAS, SUM(cc.MONTO + NVL(cc.MONTO_IVA, 0)) AS TOTAL_ADEUDO FROM CUENTA_CORRIENTE cc WHERE cc.ID_CONTRIBUYENTE_SERVICIO = :id_tarjeta AND cc.ID_ENTIDAD = :id_entidad AND cc.ESTADO = 'POR_PAGAR'",
     "format": "total",
     "params": ["id_tarjeta", "id_entidad"]
+  },
+  {
+    "id": "id_contribuyente_por_catastro",
+    "description": "Obtener ID_CONTRIBUYENTE a partir del catastro",
+    "sql": "SELECT DISTINCT cg.ID_CONTRIBUYENTE FROM CATASTRO c JOIN SERVICIO_CATASTRO sc ON c.ID_CATASTRO = sc.ID_CATASTRO JOIN CONTRIBUYENTE_SERVICIO cs ON sc.ID_SERVICIO_CATASTRO = cs.ID_SERVICIO_CATASTRO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE c.CATASTRO = :catastro AND sc.ID_ENTIDAD = :id_entidad AND ROWNUM = 1",
+    "format": "simple",
+    "params": ["catastro", "id_entidad"]
+  },
+  {
+    "id": "id_contribuyente_por_tarjeta",
+    "description": "Obtener ID_CONTRIBUYENTE a partir de la tarjeta",
+    "sql": "SELECT cg.ID_CONTRIBUYENTE FROM CG_CONTRIBUYENTE cg JOIN CONTRIBUYENTE_SERVICIO cs ON cg.ID_CONTRIBUYENTE = cs.ID_CONTRIBUYENTE WHERE cs.ID_SERVICIO_CATASTRO = :id_servicio_catastro AND ROWNUM = 1",
+    "format": "simple",
+    "params": ["id_servicio_catastro"]
+  },
+  {
+    "id": "tarjeta_por_identificador",
+    "description": "Obtener datos de tarjeta por identificador de catastro",
+    "sql": "SELECT sc.IDENTIFICADOR AS CATASTRO, cs.ID_SERVICIO_CATASTRO AS ID_SERVICIO_CATASTRO, cs.ID_CONTRIBUYENTE_SERVICIO AS ID_TARJETA, cg.NOMBRE, cg.APELLIDO_PATERNO, cg.APELLIDO_MATERNO FROM SERVICIO_CATASTRO sc JOIN CONTRIBUYENTE_SERVICIO cs ON sc.ID_SERVICIO_CATASTRO = cs.ID_SERVICIO_CATASTRO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE sc.IDENTIFICADOR = :identificador AND sc.ID_ENTIDAD = :id_entidad ORDER BY cg.NOMBRE",
+    "format": "menu",
+    "params": ["identificador", "id_entidad"]
+  },
+  {
+    "id": "id_servicio_catastro_por_identificador",
+    "description": "Obtener ID_SERVICIO_CATASTRO a partir del identificador de tarjeta",
+    "sql": "SELECT cs.ID_SERVICIO_CATASTRO FROM CONTRIBUYENTE_SERVICIO cs WHERE cs.ID_CONTRIBUYENTE_SERVICIO = :id_tarjeta AND ROWNUM = 1",
+    "format": "simple",
+    "params": ["id_tarjeta"]
+  },
+  {
+    "id": "id_contribuyente_por_dpi",
+    "description": "Obtener ID_CONTRIBUYENTE a partir del DPI",
+    "sql": "SELECT cg.ID_CONTRIBUYENTE FROM CG_CONTRIBUYENTE cg WHERE cg.DPI = :dpi AND ROWNUM = 1",
+    "format": "simple",
+    "params": ["dpi"]
+  },
+  {
+    "id": "cuentas_corrientes_pendientes_contribuyente",
+    "description": "Obtener IDs de cuentas corrientes pendientes por DPI de contribuyente",
+    "sql": "SELECT DISTINCT cc.ID_CUENTA_CORRIENTE FROM CUENTA_CORRIENTE cc JOIN CONTRIBUYENTE_SERVICIO cs ON cc.ID_CONTRIBUYENTE_SERVICIO = cs.ID_CONTRIBUYENTE_SERVICIO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE cg.DPI = :dpi AND cc.ID_ENTIDAD = :id_entidad AND cc.ESTADO = 'POR_PAGAR'",
+    "format": "json",
+    "params": ["dpi", "id_entidad"]
+  },
+  {
+    "id": "cuentas_corrientes_pendientes_contribuyente_catastro",
+    "description": "Obtener IDs de cuentas corrientes pendientes por DPI y catastro específico",
+    "sql": "SELECT DISTINCT cc.ID_CUENTA_CORRIENTE FROM CUENTA_CORRIENTE cc JOIN CONTRIBUYENTE_SERVICIO cs ON cc.ID_CONTRIBUYENTE_SERVICIO = cs.ID_CONTRIBUYENTE_SERVICIO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE JOIN SERVICIO_CATASTRO sc ON cs.ID_SERVICIO_CATASTRO = sc.ID_SERVICIO_CATASTRO JOIN CATASTRO c ON sc.ID_CATASTRO = c.ID_CATASTRO WHERE cg.DPI = :dpi AND c.CATASTRO = :catastro AND cc.ID_ENTIDAD = :id_entidad AND cc.ESTADO = 'POR_PAGAR'",
+    "format": "json",
+    "params": ["dpi", "catastro", "id_entidad"]
+  },
+  {
+    "id": "cta_pendiente_contribuyente_catastro",
+    "description": "Resumen por contribuyente filtrado por catastro específico",
+    "sql": "SELECT c.CATASTRO, cds.DESCRIPCION AS CONCEPTO, COUNT(*) AS TOTAL_CUENTAS, SUM(cc.MONTO + NVL(cc.MONTO_IVA, 0)) AS MONTO_TOTAL FROM CUENTA_CORRIENTE cc JOIN CONTRIBUYENTE_SERVICIO cs ON cc.ID_CONTRIBUYENTE_SERVICIO = cs.ID_CONTRIBUYENTE_SERVICIO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE JOIN SERVICIO_CATASTRO sc ON cs.ID_SERVICIO_CATASTRO = sc.ID_SERVICIO_CATASTRO JOIN CATASTRO c ON sc.ID_CATASTRO = c.ID_CATASTRO JOIN CG_DETALLE_SERVICIO cds ON cc.ID_DETALLE_SERVICIO = cds.ID_DETALLE_SERVICIO WHERE cg.DPI = :dpi AND c.CATASTRO = :catastro AND cc.ID_ENTIDAD = :id_entidad AND cc.ESTADO = 'POR_PAGAR' GROUP BY c.CATASTRO, cds.DESCRIPCION ORDER BY SUM(cc.MONTO + NVL(cc.MONTO_IVA, 0)) DESC",
+    "format": "resumen_agrupado",
+    "params": ["dpi", "catastro", "id_entidad"]
+  },
+  {
+    "id": "cuentas_corrientes_pendientes_catastro",
+    "description": "Obtener IDs de cuentas corrientes pendientes por catastro (todas las tarjetas)",
+    "sql": "SELECT DISTINCT cc.ID_CUENTA_CORRIENTE FROM CUENTA_CORRIENTE cc JOIN CONTRIBUYENTE_SERVICIO cs ON cc.ID_CONTRIBUYENTE_SERVICIO = cs.ID_CONTRIBUYENTE_SERVICIO JOIN SERVICIO_CATASTRO sc ON cs.ID_SERVICIO_CATASTRO = sc.ID_SERVICIO_CATASTRO JOIN CATASTRO c ON sc.ID_CATASTRO = c.ID_CATASTRO WHERE c.CATASTRO = :catastro AND cc.ID_ENTIDAD = :id_entidad AND cc.ESTADO = 'POR_PAGAR'",
+    "format": "json",
+    "params": ["catastro", "id_entidad"]
+  },
+  {
+    "id": "id_contribuyente_por_catastro_todas",
+    "description": "Obtener todos los ID_CONTRIBUYENTE a partir del catastro (para documento de cobro)",
+    "sql": "SELECT DISTINCT cg.ID_CONTRIBUYENTE FROM CATASTRO c JOIN SERVICIO_CATASTRO sc ON c.ID_CATASTRO = sc.ID_CATASTRO JOIN CONTRIBUYENTE_SERVICIO cs ON sc.ID_SERVICIO_CATASTRO = cs.ID_SERVICIO_CATASTRO JOIN CG_CONTRIBUYENTE cg ON cs.ID_CONTRIBUYENTE = cg.ID_CONTRIBUYENTE WHERE c.CATASTRO = :catastro AND sc.ID_ENTIDAD = :id_entidad",
+    "format": "json",
+    "params": ["catastro", "id_entidad"]
   }
 ]
