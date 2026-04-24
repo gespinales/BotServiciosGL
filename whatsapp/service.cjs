@@ -923,24 +923,26 @@ if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
                 queryId = 'id_contribuyente_por_tarjeta';
                 params = { id_servicio_catastro: String(id_servicio) };
             } else if (estado.tipoBusqueda === 'CATASTRO') {
-                // Necesito buscar las tarjetas del catastro primero
-                const respuestaTarjetas = await this.ejecutarPython('tarjetas_por_catastro', {
-                    catastro: estado.identificador,
-                    id_entidad: estado.entidadId
-                });
-                if (respuestaTarjetas.startsWith('ERROR') || !respuestaTarjetas.trim()) {
-                    return null;
+                // Usar todasLasTarjetas o query directa
+                let tarjetas = estado.todasLasTarjetas;
+                if (!tarjetas) {
+                    const respuestaTarjetas = await this.ejecutarPython('tarjetas_por_catastro', {
+                        catastro: estado.identificador,
+                        id_entidad: estado.entidadId
+                    });
+                    if (!respuestaTarjetas.startsWith('ERROR') && respuestaTarjetas.trim()) {
+                        try {
+                            tarjetas = JSON.parse(respuestaTarjetas.trim());
+                        } catch (e) {}
+                    }
                 }
-                const tarjetas = JSON.parse(respuestaTarjetas.trim());
-                if (!tarjetas || tarjetas.length === 0) {
-                    return null;
+                if (tarjetas && tarjetas.length > 0) {
+                    queryId = 'id_contribuyente_por_tarjeta';
+                    params = { id_servicio_catastro: String(tarjetas[0].ID_SERVICIO_CATASTRO) };
+                } else {
+                    queryId = 'id_contribuyente_por_catastro';
+                    params = { catastro: estado.identificador, id_entidad: estado.entidadId };
                 }
-                // Usar la primera tarjeta
-                queryId = 'id_contribuyente_por_tarjeta';
-                params = { id_servicio_catastro: String(tarjetas[0].ID_SERVICIO_CATASTRO) };
-            } else {
-                queryId = 'id_contribuyente_por_catastro';
-                params = { catastro: estado.identificador, id_entidad: estado.entidadId };
             }
             
 console.log(`[obtenerIdContribuyente] Query: ${queryId}, Params:`, params);
