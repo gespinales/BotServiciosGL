@@ -1,7 +1,10 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const { spawn } = require('child_process');
 const path = require('path');
 const QRCode = require('qrcode');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
 
 class WhatsAppService {
     TIMEOUT_MINUTOS = 5;
@@ -13,6 +16,10 @@ class WhatsAppService {
     }
     
     enviarConCodigo(msg, texto) {
+        if (!msg || !msg.reply) {
+            console.log(texto);
+            return;
+        }
         return msg.reply("```\n" + texto + "\n```");
     }
     
@@ -186,7 +193,7 @@ class WhatsAppService {
         if (!estado.entidad) {
             const num = parseInt(text);
             
-            if (isNaN(num) || num < 1 || num > estado.entidades.length) {
+            if (isNaN(num) || !estado.entidades || num < 1 || num > estado.entidades.length) {
                 this.enviarConCodigo('Numero no valido. Selecciona la entidad:');
                 return;
             }
@@ -227,6 +234,29 @@ class WhatsAppService {
                     await this.buscarContribuyente(msg, from);
                 } else if (estado.tipoBusqueda === 'CATASTRO') {
                     await this.mostrarTarjetasCatastro(msg, from);
+                } else if (estado.tipoBusqueda === 'TARJETA') {
+                    // Buscar el ID_TARJETA y ID_SERVICIO_CATASTRO a partir del identificador
+                    const respuesta = await this.ejecutarPython('id_tarjeta_por_identificador', {
+                        identificador: this.userState[from].identificador,
+                        id_entidad: this.userState[from].entidadId
+                    });
+                    console.log(`[TARJETA] Buscando tarjeta: ${this.userState[from].identificador}, Respuesta: ${respuesta}`);
+                    if (respuesta.startsWith('ERROR') || !respuesta.trim()) {
+                        this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
+                        delete this.userState[from].identificador;
+                        return;
+                    }
+                    // Formato json devuelve array
+                    const tarjetas = JSON.parse(respuesta.trim());
+                    if (!tarjetas || tarjetas.length === 0) {
+                        this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
+                        delete this.userState[from].identificador;
+                        return;
+                    }
+                    this.userState[from].tarjetaId = String(tarjetas[0].ID_TARJETA);
+                    this.userState[from].id_servicio = String(tarjetas[0].ID_SERVICIO_CATASTRO);
+                    this.userState[from].tarjetaSeleccionada = this.userState[from].identificador;
+                    await this.enviarMenu(msg, from);
                 } else {
                     await this.enviarMenu(msg, from);
                 }
@@ -243,7 +273,7 @@ class WhatsAppService {
             }
             
             const num = parseInt(text);
-            if (isNaN(num) || num < 1 || num > estado.catastros.length) {
+            if (isNaN(num) || !estado.catastros || num < 1 || num > estado.catastros.length) {
                 this.enviarConCodigo('Numero no valido. Selecciona el catastro:');
                 return;
             }
@@ -271,10 +301,13 @@ class WhatsAppService {
             // - tarjetaSeleccionada = IDENTIFICADOR del catastro (CATASTRO)
             // - tarjetaId = ID_TARJETA para queries
             // - tarjetaNombre = nombre completo
+            // - id_servicio = ID_SERVICIO_CATASTRO
             this.userState[from].tarjetaSeleccionada = t.CATASTRO || estado.identificador;
             this.userState[from].tarjetaId = t.ID_TARJETA;
             this.userState[from].tarjetaNombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
             this.userState[from].tipoBusqueda = 'TARJETA_CATASTRO';
+            this.userState[from].id_servicio = t.ID_SERVICIO_CATASTRO;
+            this.userState[from].idServicioCatastro = t.ID_SERVICIO_CATASTRO;
             delete this.userState[from].esperandoTarjeta;
             await this.enviarMenu(msg, from);
             return;
@@ -297,13 +330,19 @@ class WhatsAppService {
         }
 
         if (!estado.queryType) {
-            if (['1'].includes(text)) {
+            if (['1', '2'].includes(text)) {
                 const opciones = this.getOpcionesConsulta(estado.tipoBusqueda, estado.catastroSeleccionado);
                 const opcion = opciones[text];
                 
                 this.userState[from].queryResumen = opcion.resumen;
                 this.userState[from].queryDetalle = opcion.detalle;
                 this.userState[from].queryName = opcion.nombre;
+                this.userState[from].menuOption = text;
+                
+                if (text === '2') {
+                    await this.generarDocumentoCobro(msg, from);
+                    return;
+                }
                 
                 await this.runResumen(msg, from);
                 return;
@@ -335,7 +374,7 @@ class WhatsAppService {
                 await this.runDetalle(msg, from);
             } else {
                 const num = parseInt(text);
-                if (isNaN(num) || num < 1 || num > estado.tarjetasCatastro.length) {
+if (isNaN(num) || !estado.tarjetasCatastro || num < 1 || num > estado.tarjetasCatastro.length) {
                     this.enviarConCodigo('Numero no valido. Selecciona la tarjeta:');
                     return;
                 }
@@ -343,6 +382,9 @@ class WhatsAppService {
                 this.userState[from].tarjetaDetalleSeleccionada = estado.tarjetasCatastro[num - 1].ID_TARJETA;
                 this.userState[from].tarjetaNombre = estado.tarjetasCatastro[num - 1].NOMBRE;
                 this.userState[from].tipoBusqueda = 'TARJETA_CATASTRO';
+                this.userState[from].id_servicio = estado.tarjetasCatastro[num - 1].ID_SERVICIO_CATASTRO;
+                this.userState[from].tarjetaId = estado.tarjetasCatastro[num - 1].ID_TARJETA;
+                this.userState[from].tarjetaSeleccionada = `${estado.tarjetasCatastro[num - 1].NOMBRE} ${estado.tarjetasCatastro[num - 1].APELLIDO_PATERNO || ''}`.trim();
                 delete this.userState[from].solicitandoDetalleTarjeta;
                 await this.runDetalleTarjeta(msg, from);
             }
@@ -352,19 +394,26 @@ class WhatsAppService {
         this.enviarConCodigo('Opcion no valida.\nEscribe 0 para reiniciar.');
     }
 
-    getOpcionesConsulta(tipo, catastro) {
-        // Definición de opciones de consulta
-        // Estructura: numero: { sufijo, nombre, queries: { tipo_busqueda: {resumen, detalle} } }
+getOpcionesConsulta(tipo, catastro) {
         const opciones = {
             '1': {
                 sufijo: 'pendiente',
                 nombre: 'Cuentas Pendientes',
                 queries: {
-// Exactamente igual que simulate.py
-                'CONTRIBUYENTE': { resumen: 'cta_pendiente_contribuyente', detalle: 'cta_pendiente_detalle_contribuyente' },
-                'CATASTRO': { resumen: 'cta_pendiente_catastro', detalle: 'cta_pendiente_detalle' },
-                'TARJETA_CATASTRO': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle_tarjeta' },
-                'TARJETA': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle_tarjeta' }
+                    'CONTRIBUYENTE': { resumen: 'cta_pendiente_contribuyente', detalle: 'cta_pendiente_detalle_contribuyente' },
+                    'CATASTRO': { resumen: 'cta_pendiente_catastro', detalle: 'cta_pendiente_detalle' },
+                    'TARJETA_CATASTRO': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle_tarjeta' },
+                    'TARJETA': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle_tarjeta' }
+                }
+            },
+            '2': {
+                sufijo: 'documento',
+                nombre: 'Generar Documento de Cobro',
+                queries: {
+                    'CONTRIBUYENTE': { resumen: 'cta_pendiente_contribuyente', detalle: 'documento_cobro' },
+                    'CATASTRO': { resumen: 'cta_pendiente_catastro', detalle: 'documento_cobro' },
+                    'TARJETA_CATASTRO': { resumen: 'cta_pendiente_tarjeta', detalle: 'documento_cobro' },
+                    'TARJETA': { resumen: 'cta_pendiente_tarjeta', detalle: 'documento_cobro' }
                 }
             }
         };
@@ -525,6 +574,9 @@ this.enviarConCodigo(msg, `Has elegido: Buscar por ${tipos[text].tipo}\n\n${tipo
             
             this.userState[from].tarjetasCatastro = tarjetas;
             
+            // Guardar todas las tarjetas para referencia futura
+            this.userState[from].todasLasTarjetas = tarjetas;
+            
             let mensaje = `CATASTRO: ${estado.identificador}\n\nSe encontraron ${tarjetas.length} tarjeta(s) en este catastro:\n\n`;
             tarjetas.forEach((t, i) => {
                 // Formato igual que simulate.py: nombre completo + identificador de catastro
@@ -572,6 +624,7 @@ ${idMostrar}
 
 Paso 4: Selecciona la consulta:
 1. Cuentas Pendientes
+2. Generar Documento de Cobro
 
 0. Reiniciar
 X. Salir`;
@@ -606,6 +659,322 @@ X. Salir`;
         
         await this.enviarConCodigo(msg, mensaje);
         this.userState[from].esperandoDetalle = true;
+    }
+
+async generarDocumentoCobro(msg, from) {
+        const estado = this.userState[from];
+        
+        console.log(`[DOCUMENTO_COBRO] Tipo: ${estado.tipoBusqueda}, Identificador: ${estado.identificador}, TarjetaId: ${estado.tarjetaId}, id_servicio: ${estado.id_servicio}, EntidadId: ${estado.entidadId}`);
+        
+        try {
+            let cuentas = [];
+            
+            // Obtener cuentas según el tipo de búsqueda
+            if (estado.tipoBusqueda === 'TARJETA' || estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                const respuesta = await this.ejecutarPython('cuentas_corrientes_pendientes', {
+                    id_tarjeta: estado.tarjetaId,
+                    id_entidad: estado.entidadId
+                });
+                console.log(`[DOCUMENTO_COBRO] Respuesta cuentas: ${respuesta.substring(0, 300)}`);
+                if (!respuesta.startsWith('ERROR') && respuesta.trim()) {
+                    cuentas = JSON.parse(respuesta.trim());
+                }
+            } else if (estado.tipoBusqueda === 'CATASTRO') {
+                const respuesta = await this.ejecutarPython('cuentas_corrientes_pendientes_catastro', {
+                    catastro: estado.identificador,
+                    id_entidad: estado.entidadId
+                });
+                if (!respuesta.startsWith('ERROR') && respuesta.trim()) {
+                    cuentas = JSON.parse(respuesta.trim());
+                }
+            } else if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
+                const respuesta = await this.ejecutarPython('cuentas_corrientes_pendientes_contribuyente', {
+                    dpi: estado.identificador,
+                    id_entidad: estado.entidadId
+                });
+                if (!respuesta.startsWith('ERROR') && respuesta.trim()) {
+                    cuentas = JSON.parse(respuesta.trim());
+                }
+            }
+            
+            console.log(`[DOCUMENTO_COBRO] Cuentas obtenidas: ${cuentas.length}`);
+            
+            if (!cuentas || cuentas.length === 0) {
+                await this.enviarConCodigo(msg, 'No hay cuentas pendientes para generar documento de cobro.');
+                delete this.userState[from];
+                return;
+            }
+            
+            // Hay cuentas -> generar documento directamente
+            await this.procesarDocumentoCobro(msg, from, cuentas.map(c => c.ID_CUENTA_CORRIENTE));
+        } catch (error) {
+            console.error('[DOCUMENTO_COBRO] Error:', error);
+            this.enviarConCodigo('Error al procesar la consulta.');
+            delete this.userState[from];
+        }
+    }
+
+async procesarDocumentoCobro(msg, from, idsCuentas) {
+        const estado = this.userState[from];
+        
+        try {
+            // Obtener ID_CONTRIBUYENTE según el tipo de búsqueda
+            const idContribuyente = await this.obtenerIdContribuyente(estado);
+            
+            console.log(`[procesarDocumentoCobro] idContribuyente: ${idContribuyente}`);
+            
+            if (!idContribuyente) {
+                await this.enviarConCodigo(msg, 'No se pudo obtener el identificador del contribuyente.');
+                delete this.userState[from];
+                return;
+            }
+            
+            // Enviar mensaje de espera
+            await this.enviarConCodigo(msg, `Generando documento de cobro para ${idsCuentas.length} cuenta(s)...`);
+            
+            // URL del API
+            const apiUrl = 'http://localhost:5562/api/comunicabanco/consultareporte';
+            
+            // Preparar JSON body
+            const body = JSON.stringify({
+                "ID_ENTIDAD": estado.entidadId,
+                "STR_USR": "sias",
+                "STRPWD": "Password.Secreto",
+                "REPORTE": "GENERAR_DOCUMENTO_COBRO_CUENTA_CORRIENTE",
+                "ID_CONTRIBUYENTE_DOC": parseInt(idContribuyente),
+                "CUENTAS_CORRIENTES": idsCuentas.join(',')
+            });
+            
+            console.log(`[procesarDocumentoCobro] Body: ${body}`);
+            
+            // Descargar el PDF usando POST
+            const pdfBuffer = await this.descargarPdfPost(apiUrl, body);
+            
+            if (!pdfBuffer) {
+                await this.enviarConCodigo(msg, 'Error al generar el documento. Intenta nuevamente.');
+                delete this.userState[from];
+                return;
+            }
+            
+            // Parsear la respuesta JSON del API
+            let respuesta;
+            try {
+                respuesta = JSON.parse(pdfBuffer.toString('utf8'));
+                console.log(`[procesarDocumentoCobro] Respuesta API: ${pdfBuffer.toString('utf8').substring(0, 300)}`);
+            } catch (e) {
+                console.log(`[procesarDocumentoCobro] Error parseando JSON: ${e}`);
+                await this.enviarConCodigo(msg, 'Error al procesar la respuesta del servidor.');
+                delete this.userState[from];
+                return;
+            }
+            
+// Extraer el PDF de la respuesta
+            let pdfBytes;
+            try {
+                console.log(`[procesarDocumentoCobro] Respuesta: ${JSON.stringify(respuesta).substring(0, 500)}`);
+                
+                // El campo "data" contiene un JSON stringified
+                let dataObj;
+                const dataStr = respuesta.data;
+                if (typeof dataStr === 'string') {
+                    // Parsear el string inner JSON
+                    dataObj = JSON.parse(dataStr);
+                } else {
+                    dataObj = dataStr;
+                }
+                
+                console.log(`[procesarDocumentoCobro] dataObj: ${JSON.stringify(dataObj).substring(0, 300)}`);
+                
+                // Buscar Documento_Bytes en diferentes ubicaciones
+                if (dataObj.Documento_Bytes) {
+                    pdfBytes = Buffer.from(dataObj.Documento_Bytes, 'base64');
+                } else if (dataObj.mdlDocumento && dataObj.mdlDocumento[0] && dataObj.mdlDocumento[0].Documento_Bytes) {
+                    pdfBytes = Buffer.from(dataObj.mdlDocumento[0].Documento_Bytes, 'base64');
+                }
+                
+                if (!pdfBytes || pdfBytes.length === 0) {
+                    console.log(`[procesarDocumentoCobro] No hay Documento_Bytes. dataObj: ${JSON.stringify(dataObj)}`);
+                    await this.enviarConCodigo(msg, 'Error: No se generó el documento.');
+                    delete this.userState[from];
+                    return;
+                }
+            } catch (e) {
+                console.log(`[procesarDocumentoCobro] Error extrayendo PDF: ${e}`);
+                await this.enviarConCodigo(msg, 'Error al procesar el documento.');
+                delete this.userState[from];
+                return;
+            }
+            
+            console.log(`[procesarDocumentoCobro] PDF bytes: ${pdfBytes.length}`);
+            
+            // Enviar el PDF por WhatsApp usando msg.reply
+            const tempPath = path.join(__dirname, '..', 'data', `temp_${Date.now()}.pdf`);
+            const dataDir = path.join(__dirname, '..', 'data');
+            if (!fs.existsSync(dataDir)) {
+                fs.mkdirSync(dataDir, { recursive: true });
+            }
+            fs.writeFileSync(tempPath, pdfBytes);
+            
+            try {
+                const media = MessageMedia.fromFilePath(tempPath);
+                console.log(`[procesarDocumentoCobro] Media mime: ${media.mimetype}, size: ${media.data.length}`);
+                // Usar msg.reply para mantener el contexto del chat
+                await msg.reply(media);
+                console.log(`[procesarDocumentoCobro] PDF enviado exitosamente`);
+            } catch (e) {
+                console.log(`[procesarDocumentoCobro] Error sending media: ${e}, stack: ${e.stack}`);
+                await this.enviarConCodigo(msg, `Error al enviar PDF. Descárgalo aquí: ${tempPath}`);
+            } finally {
+                try { fs.unlinkSync(tempPath); } catch (e) {}
+            }
+            
+            await this.enviarConCodigo(msg, `Documento de cobro enviado!\n\nGracias por usar el servicio!`);
+            delete this.userState[from];
+            
+        } catch (error) {
+            console.error('Error generando documento:', error);
+            this.enviarConCodigo('Error al generar el documento de cobro. Intenta nuevamente.');
+            delete this.userState[from];
+        }
+    }
+    
+    descargarPdfPost(url, body) {
+        console.log(`[descargarPdfPost] URL: ${url}, Body: ${body}`);
+        return new Promise((resolve, reject) => {
+            const req = http.request(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(body)
+                }
+            }, (res) => {
+                console.log(`[descargarPdfPost] Status: ${res.statusCode}`);
+                if (res.statusCode !== 200) {
+                    resolve(null);
+                    return;
+                }
+                
+                const chunks = [];
+                res.on('data', (chunk) => chunks.push(chunk));
+                res.on('end', () => {
+                    console.log(`[descargarPdfPost] Bytes recibidos: ${Buffer.concat(chunks).length}`);
+                    resolve(Buffer.concat(chunks));
+                });
+                res.on('error', (err) => {
+                    console.log(`[descargarPdfPost] Error: ${err}`);
+                    resolve(null);
+                });
+            });
+            
+            req.write(body);
+            req.on('error', (err) => {
+                console.log(`[descargarPdfPost] Request error: ${err}`);
+                resolve(null);
+            });
+        });
+    }
+
+async obtenerIdContribuyente(estado) {
+        try {
+            let queryId, params;
+            
+            console.log(`[obtenerIdContribuyente] tipoBusqueda: ${estado.tipoBusqueda}, tarjetaId: ${estado.tarjetaId}, id_servicio: ${estado.id_servicio}`);
+            
+if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
+                queryId = 'id_contribuyente_por_dpi';
+                params = { dpi: estado.identificador };
+            } else if (estado.tipoBusqueda === 'TARJETA') {
+                // Para TARJETA: obtener id_servicio de multiples fuentes
+                let id_servicio = estado.id_servicio || estado.id_servicio_catastro || estado.id_servicioCatastro;
+                if (!id_servicio && estado.tarjetaId) {
+                    const respuestaId = await this.ejecutarPython('id_servicio_catastro_por_identificador', {
+                        id_tarjeta: estado.tarjetaId
+                    });
+                    if (!respuestaId.startsWith('ERROR') && respuestaId.trim() && respuestaId.trim() !== 'None') {
+                        try {
+                            const idData = JSON.parse(respuestaId.trim());
+                            id_servicio = idData?.[0]?.ID_SERVICIO_CATASTRO;
+                        } catch (e) {}
+                    }
+                }
+                if (!id_servicio) {
+                    console.log('[obtenerIdContribuyente] No hay id_servicio para TARJETA');
+                    return null;
+                }
+                console.log(`[obtenerIdContribuyente] id_servicio: ${id_servicio}`);
+                queryId = 'id_contribuyente_por_tarjeta';
+                params = { id_servicio_catastro: String(id_servicio) };
+            } else if (estado.tipoBusqueda === 'TARJETA_CATASTRO') {
+                // Para TARJETA_CATASTRO: obtener id_servicio_catastro de multiples fuentes
+                let id_servicio = estado.id_servicio || estado.id_servicio_catastro || estado.id_servicioCatastro;
+                if (!id_servicio && estado.tarjetaId) {
+                    // Intentar obtener desde la tarjeta
+                    const respuestaId = await this.ejecutarPython('id_servicio_catastro_por_identificador', {
+                        id_tarjeta: estado.tarjetaId
+                    });
+                    if (!respuestaId.startsWith('ERROR') && respuestaId.trim() && respuestaId.trim() !== 'None') {
+                        try {
+                            const idData = JSON.parse(respuestaId.trim());
+                            id_servicio = idData?.[0]?.ID_SERVICIO_CATASTRO;
+                        } catch (e) {}
+                    }
+                }
+                console.log(`[obtenerIdContribuyente] id_servicio: ${id_servicio}`);
+                queryId = 'id_contribuyente_por_tarjeta';
+                params = { id_servicio_catastro: String(id_servicio) };
+            } else if (estado.tipoBusqueda === 'CATASTRO') {
+                // Necesito buscar las tarjetas del catastro primero
+                const respuestaTarjetas = await this.ejecutarPython('tarjetas_por_catastro', {
+                    catastro: estado.identificador,
+                    id_entidad: estado.entidadId
+                });
+                if (respuestaTarjetas.startsWith('ERROR') || !respuestaTarjetas.trim()) {
+                    return null;
+                }
+                const tarjetas = JSON.parse(respuestaTarjetas.trim());
+                if (!tarjetas || tarjetas.length === 0) {
+                    return null;
+                }
+                // Usar la primera tarjeta
+                queryId = 'id_contribuyente_por_tarjeta';
+                params = { id_servicio_catastro: String(tarjetas[0].ID_SERVICIO_CATASTRO) };
+            } else {
+                queryId = 'id_contribuyente_por_catastro';
+                params = { catastro: estado.identificador, id_entidad: estado.entidadId };
+            }
+            
+console.log(`[obtenerIdContribuyente] Query: ${queryId}, Params:`, params);
+            const respuesta = await this.ejecutarPython(queryId, params);
+            console.log(`[obtenerIdContribuyente] Respuesta: ${respuesta}`);
+            if (respuesta.startsWith('ERROR') || !respuesta.trim()) {
+                console.log(`[obtenerIdContribuyente] Error o vacio: ${respuesta}`);
+                return null;
+            }
+            
+            // Extraer el ID_CONTRIBUYENTE del resultado
+            try {
+                const data = JSON.parse(respuesta.trim());
+                //_handle both array and simple formats
+                if (Array.isArray(data) && data[0] && data[0].ID_CONTRIBUYENTE) {
+                    return String(data[0].ID_CONTRIBUYENTE);
+                } else if (typeof data === 'number') {
+                    return String(data);
+                } else if (typeof data === 'string' && data.match(/^\d+$/)) {
+                    return data;
+                }
+            } catch (e) {
+                // Maybe it's just a number/string directly
+                const trimmed = respuesta.trim();
+                if (trimmed.match(/^\d+$/)) {
+                    return trimmed;
+                }
+                console.log(`[obtenerIdContribuyente] Error parseando: ${e}`);
+            }
+            return null;
+        } catch (error) {
+            console.error('Error obteniendo ID contribuyente:', error);
+            return null;
+        }
     }
 
     async runDetalleTarjeta(msg, from) {
@@ -795,13 +1164,17 @@ if (estado.tipoBusqueda === 'CATASTRO') {
     }
 
     getQueryParams(estado) {
-        // Exactamente igual que simulate.py
         if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
             return {
                 dpi: estado.identificador,
                 id_entidad: estado.entidadId
             };
         } else if (estado.tipoBusqueda === 'CATASTRO') {
+            return {
+                identificador: estado.identificador,
+                id_entidad: estado.entidadId
+            };
+        } else if (estado.tipoBusqueda === 'TARJETA') {
             return {
                 identificador: estado.identificador,
                 id_entidad: estado.entidadId
@@ -956,6 +1329,7 @@ except Exception as e:
     }
 
     async ejecutarPython(queryId, params) {
+        console.log(`[ejecutarPython] Query: ${queryId}, Params:`, params);
         return new Promise((resolve, reject) => {
             const paramsStr = Object.entries(params)
                 .map(([k, v]) => `'${k}': '${v}'`)
@@ -970,6 +1344,9 @@ import json
 try:
     queries = json.load(open('config/queries.json', 'r', encoding='utf-8'))
     load_queries(queries)
+    
+    q = next((x for x in queries if x['id'] == '${queryId}'), None)
+    print(f'QUERY_Found: {q is not None}, Format: {q.get("format") if q else "N/A"}', file=__import__(\"sys\").stderr)
 
     result = execute_query('${queryId}', {${paramsStr}})
     if result.success:

@@ -258,6 +258,13 @@
     "params": ["identificador", "id_entidad"]
   },
   {
+    "id": "id_tarjeta_por_identificador",
+    "description": "Obtener ID_TARJETA e ID_SERVICIO_CATASTRO a partir del identificador (json)",
+    "sql": "SELECT cs.ID_CONTRIBUYENTE_SERVICIO AS ID_TARJETA, cs.ID_SERVICIO_CATASTRO AS ID_SERVICIO_CATASTRO FROM SERVICIO_CATASTRO sc JOIN CONTRIBUYENTE_SERVICIO cs ON sc.ID_SERVICIO_CATASTRO = cs.ID_SERVICIO_CATASTRO WHERE sc.IDENTIFICADOR = :identificador AND sc.ID_ENTIDAD = :id_entidad AND ROWNUM = 1",
+    "format": "json",
+    "params": ["identificador", "id_entidad"]
+  },
+  {
     "id": "id_servicio_catastro_por_identificador",
     "description": "Obtener ID_SERVICIO_CATASTRO a partir del identificador de tarjeta",
     "sql": "SELECT cs.ID_SERVICIO_CATASTRO FROM CONTRIBUYENTE_SERVICIO cs WHERE cs.ID_CONTRIBUYENTE_SERVICIO = :id_tarjeta AND ROWNUM = 1",
