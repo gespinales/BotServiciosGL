@@ -268,7 +268,31 @@ class WhatsAppService {
 
         if (estado.tipoBusqueda === 'CONTRIBUYENTE' && !estado.catastroSeleccionado && !estado.queryType) {
             if (text === 'T') {
-                await this.enviarMenu(msg, from);
+                // Load all cards from all catastros
+                this.userState[from].tipoBusqueda = 'CONTRIBUYENTE_TODOS';
+                // Combine cards from all catastros
+                const promises = estado.catastros.map(c => this.obtenerTarjetasCatastro(c.CATASTRO, estado.entidadId));
+                const results = await Promise.all(promises);
+                const todasTarjetas = results.flat();
+                
+                if (!todasTarjetas || todasTarjetas.length === 0) {
+                    this.enviarConCodigo('No se encontraron tarjetas.');
+                    return;
+                }
+                
+                this.userState[from].tarjetasCatastro = todasTarjetas;
+                this.userState[from].todasLasTarjetas = todasTarjetas;
+                this.userState[from].catastroSeleccionado = 'TODOS';
+                
+                let mensaje = `CONTRIBUYENTE: ${estado.identificador}\nTodas las tarjetas\n\nSe encontraron ${todasTarjetas.length} tarjeta(s):\n\n`;
+                todasTarjetas.forEach((t, i) => {
+                    const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
+                    mensaje += `${i + 1}. ${nombre} - ${t.CATASTRO}\n`;
+                });
+                mensaje += `\nT. Ver todas las cuentas (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver todas:`;
+                
+                await this.enviarConCodigo(msg, mensaje);
+                this.userState[from].esperandoTarjeta = true;
                 return;
             }
             
@@ -279,11 +303,31 @@ class WhatsAppService {
             }
             
             this.userState[from].catastroSeleccionado = estado.catastros[num - 1].CATASTRO;
-            await this.enviarMenu(msg, from);
+            // Use catastroSeleccionado to show cards
+            const tarjetas = await this.obtenerTarjetasCatastro(this.userState[from].catastroSeleccionado, estado.entidadId);
+            
+            if (!tarjetas || tarjetas.length === 0) {
+                this.enviarConCodigo(`No se encontraron tarjetas para el catastro: ${this.userState[from].catastroSeleccionado}`);
+                return;
+            }
+            
+            this.userState[from].tarjetasCatastro = tarjetas;
+            this.userState[from].todasLasTarjetas = tarjetas;
+            this.userState[from].tipoBusqueda = 'CONTRIBUYENTE';
+            
+            let mensaje = `CONTRIBUYENTE: ${estado.identificador}\nCatastro: ${this.userState[from].catastroSeleccionado}\n\nSe encontraron ${tarjetas.length} tarjeta(s):\n\n`;
+            tarjetas.forEach((t, i) => {
+                const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
+                mensaje += `${i + 1}. ${nombre} - ${t.CATASTRO}\n`;
+            });
+            mensaje += `\nT. Ver todas las cuentas (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver todas:`;
+            
+            await this.enviarConCodigo(msg, mensaje);
+            this.userState[from].esperandoTarjeta = true;
             return;
         }
 
-        if (estado.esperandoTarjeta && estado.tipoBusqueda === 'CATASTRO') {
+        if (estado.esperandoTarjeta && (estado.tipoBusqueda === 'CATASTRO' || estado.tipoBusqueda === 'CONTRIBUYENTE' || estado.tipoBusqueda === 'CONTRIBUYENTE_TODOS')) {
             if (text === 'T') {
                 delete this.userState[from].esperandoTarjeta;
                 await this.enviarMenu(msg, from);
