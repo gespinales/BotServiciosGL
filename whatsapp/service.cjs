@@ -445,6 +445,7 @@ getOpcionesConsulta(tipo, catastro) {
                 nombre: 'Cuentas Pendientes',
                 queries: {
                     'CONTRIBUYENTE': { resumen: 'cta_pendiente_contribuyente', detalle: 'cta_pendiente_detalle_contribuyente' },
+                    'CONTRIBUYENTE_TODOS': { resumen: 'cta_pendiente_contribuyente', detalle: 'cta_pendiente_detalle_contribuyente' },
                     'CATASTRO': { resumen: 'cta_pendiente_catastro', detalle: 'cta_pendiente_detalle' },
                     'TARJETA_CATASTRO': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle_tarjeta' },
                     'TARJETA': { resumen: 'cta_pendiente_tarjeta', detalle: 'cta_pendiente_detalle_tarjeta' }
@@ -455,6 +456,7 @@ getOpcionesConsulta(tipo, catastro) {
                 nombre: 'Generar Documento de Cobro',
                 queries: {
                     'CONTRIBUYENTE': { resumen: 'cta_pendiente_contribuyente', detalle: 'documento_cobro' },
+                    'CONTRIBUYENTE_TODOS': { resumen: 'cta_pendiente_contribuyente', detalle: 'documento_cobro' },
                     'CATASTRO': { resumen: 'cta_pendiente_catastro', detalle: 'documento_cobro' },
                     'TARJETA_CATASTRO': { resumen: 'cta_pendiente_tarjeta', detalle: 'documento_cobro' },
                     'TARJETA': { resumen: 'cta_pendiente_tarjeta', detalle: 'documento_cobro' }
@@ -524,8 +526,9 @@ async enviarDepartamentos(msg) {
 
 Soy el asistente de consultas de Cuenta Corriente.
 
-Puedo ayudarte a consultar:
-- Cuentas pendientes
+Puedo ayudarte a realizar lo siguiente:
+- Consultar cuentas pendientes
+- Generar documento de cobro
 
 Para comenzar, escribe cualquier texto o numero para iniciar la consulta.
 
