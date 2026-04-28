@@ -208,21 +208,74 @@ class WhatsAppService {
         }
 
         if (!estado.tipoBusqueda) {
-            const tipos = {
+            // Paso 3: Intentar Ollama primero (modo híbrido)
+            const clasificacion = await this.clasificarBusqueda(msg.body);
+            
+            if (clasificacion && clasificacion.tipo) {
+                // Ollama identificó el tipo de búsqueda
+                const tipos = {
+                    'TARJETA': { tipo: 'TARJETA', prompt: 'Ingresa el NÚMERO DE TARJETA:', placeholder: 'tarjeta' },
+                    'CATASTRO': { tipo: 'CATASTRO', prompt: 'Ingresa el NÚMERO DE CATASTRO:', placeholder: 'catastro' },
+                    'CONTRIBUYENTE': { tipo: 'CONTRIBUYENTE', prompt: 'Ingresa el DPI del contribuyente:', placeholder: 'DPI' }
+                };
+                
+                const tipoInfo = tipos[clasificacion.tipo];
+                this.userState[from].tipoBusqueda = tipoInfo.tipo;
+                this.userState[from].promptBusqueda = tipoInfo.prompt;
+                
+                this.enviarConCodigo(msg, `Has elegido (IA): Buscar por ${tipoInfo.tipo}\n\n${tipoInfo.prompt}\n(Escribe X para reiniciar)`);
+                
+                // Si Ollama también identificó el identificador, procesarlo directamente
+                if (clasificacion.identificador && clasificacion.identificador.length >= 3) {
+                    this.userState[from].identificador = clasificacion.identificador.toUpperCase();
+                    
+                    if (tipoInfo.tipo === 'CONTRIBUYENTE') {
+                        await this.buscarContribuyente(msg, from);
+                    } else if (tipoInfo.tipo === 'CATASTRO') {
+                        await this.mostrarTarjetasCatastro(msg, from);
+                    } else if (tipoInfo.tipo === 'TARJETA') {
+                        const respuesta = await this.ejecutarPython('id_tarjeta_por_identificador', {
+                            identificador: clasificacion.identificador,
+                            id_entidad: this.userState[from].entidadId
+                        });
+                        console.log(`[TARJETA-IA] Buscando tarjeta: ${clasificacion.identificador}, Respuesta: ${respuesta}`);
+                        if (respuesta.startsWith('ERROR') || !respuesta.trim()) {
+                            this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
+                            delete this.userState[from].identificador;
+                            return;
+                        }
+                        const tarjetas = JSON.parse(respuesta.trim());
+                        if (!tarjetas || tarjetas.length === 0) {
+                            this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
+                            delete this.userState[from].identificador;
+                            return;
+                        }
+                        this.userState[from].tarjetaId = String(tarjetas[0].ID_TARJETA);
+                        this.userState[from].id_servicio = String(tarjetas[0].ID_SERVICIO_CATASTRO);
+                        this.userState[from].tarjetaSeleccionada = clasificacion.identificador;
+                        await this.enviarMenu(msg, from);
+                    }
+                    return;
+                }
+                return;
+            }
+            
+            // Fallback: menú numérico tradicional
+            const tiposNumericos = {
                 '1': { tipo: 'TARJETA', prompt: 'Ingresa el NÚMERO DE TARJETA:', placeholder: 'tarjeta' },
                 '2': { tipo: 'CATASTRO', prompt: 'Ingresa el NÚMERO DE CATASTRO:', placeholder: 'catastro' },
                 '3': { tipo: 'CONTRIBUYENTE', prompt: 'Ingresa el DPI del contribuyente:', placeholder: 'DPI' }
             };
             
-            if (!tipos[text]) {
+            if (!tiposNumericos[text]) {
                 this.enviarConCodigo('Opción no válida. Selecciona el tipo de búsqueda:\n1️⃣ TARJETA\n2️⃣ CATASTRO\n3️⃣ CONTRIBUYENTE');
                 return;
             }
             
-            this.userState[from].tipoBusqueda = tipos[text].tipo;
-            this.userState[from].promptBusqueda = tipos[text].prompt;
+            this.userState[from].tipoBusqueda = tiposNumericos[text].tipo;
+            this.userState[from].promptBusqueda = tiposNumericos[text].prompt;
             
-            this.enviarConCodigo(msg, `Has elegido: Buscar por ${tipos[text].tipo}\n\n${tipos[text].prompt}\n(Escribe X para reiniciar)`);
+            this.enviarConCodigo(msg, `Has elegido: Buscar por ${tiposNumericos[text].tipo}\n\n${tiposNumericos[text].prompt}\n(Escribe X para reiniciar)`);
             return;
         }
 
@@ -575,8 +628,32 @@ Escribe X para salir.`;
         }
     }
 
+    async clasificarBusqueda(texto) {
+        try {
+            const scriptPath = path.join(__dirname, '..', 'src', 'services', 'classify_search.py');
+            const result = await new Promise((resolve) => {
+                const proc = spawn('python', [scriptPath, texto]);
+                let output = '';
+                proc.stdout.on('data', (data) => { output += data.toString(); });
+                proc.on('close', () => {
+                    try {
+                        const parsed = JSON.parse(output.trim());
+                        resolve(parsed);
+                    } catch (e) {
+                        resolve({ tipo: null, identificador: null });
+                    }
+                });
+            });
+            return result;
+        } catch (error) {
+            console.log('[classify_search] Error:', error);
+            return { tipo: null, identificador: null };
+        }
+    }
+
     async enviarTipoBusqueda(msg) {
-        const estado = this.userState[msg.from];
+        const from = msg.from;
+        const estado = this.userState[from];
         
         const mensaje = `ENTIDAD: ${estado.entidadNombre}
 
