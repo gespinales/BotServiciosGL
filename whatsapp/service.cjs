@@ -176,7 +176,7 @@ class WhatsAppService {
             const deptos = await this.obtenerDepartamentos();
             
             if (isNaN(num) || num < 1 || num > deptos.length) {
-                this.enviarConCodigo('Numero no valido. Selecciona el departamento:');
+                this.enviarConCodigo('Número no válido. Selecciona el departamento:');
                 return;
             }
             
@@ -194,7 +194,7 @@ class WhatsAppService {
             const num = parseInt(text);
             
             if (isNaN(num) || !estado.entidades || num < 1 || num > estado.entidades.length) {
-                this.enviarConCodigo('Numero no valido. Selecciona la entidad:');
+                this.enviarConCodigo('Número no válido. Selecciona la entidad:');
                 return;
             }
             
@@ -208,16 +208,16 @@ class WhatsAppService {
         }
 
         if (!estado.tipoBusqueda) {
-            if (!['1', '2', '3'].includes(text)) {
-                this.enviarConCodigo('Opcion no valida. Selecciona el tipo de busqueda:');
-                return;
-            }
-            
             const tipos = {
-                '1': { tipo: 'TARJETA', prompt: 'Ingresa el NUMERO DE TARJETA:', placeholder: 'tarjeta' },
-                '2': { tipo: 'CATASTRO', prompt: 'Ingresa el NUMERO DE CATASTRO:', placeholder: 'catastro' },
+                '1': { tipo: 'TARJETA', prompt: 'Ingresa el NÚMERO DE TARJETA:', placeholder: 'tarjeta' },
+                '2': { tipo: 'CATASTRO', prompt: 'Ingresa el NÚMERO DE CATASTRO:', placeholder: 'catastro' },
                 '3': { tipo: 'CONTRIBUYENTE', prompt: 'Ingresa el DPI del contribuyente:', placeholder: 'DPI' }
             };
+            
+            if (!tipos[text]) {
+                this.enviarConCodigo('Opción no válida. Selecciona el tipo de búsqueda:\n1️⃣ TARJETA\n2️⃣ CATASTRO\n3️⃣ CONTRIBUYENTE');
+                return;
+            }
             
             this.userState[from].tipoBusqueda = tipos[text].tipo;
             this.userState[from].promptBusqueda = tipos[text].prompt;
@@ -287,9 +287,9 @@ class WhatsAppService {
                 let mensaje = `CONTRIBUYENTE: ${estado.identificador}\nTodas las tarjetas\n\nSe encontraron ${todasTarjetas.length} tarjeta(s):\n\n`;
                 todasTarjetas.forEach((t, i) => {
                     const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
-                    mensaje += `${i + 1}. ${nombre} - ${t.CATASTRO}\n`;
+                    mensaje += `${this.getNumeroEmoji(i)} ${nombre} - ${t.CATASTRO}\n`;
                 });
-                mensaje += `\nT. Ver todas las cuentas (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver todas:`;
+                mensaje += `\nT. Ver todas las cuentas (T)\n\nEscribe el número de tarjeta para ver sus cuentas, o T para ver todas:`;
                 
                 await this.enviarConCodigo(msg, mensaje);
                 this.userState[from].esperandoTarjeta = true;
@@ -298,7 +298,7 @@ class WhatsAppService {
             
             const num = parseInt(text);
             if (isNaN(num) || !estado.catastros || num < 1 || num > estado.catastros.length) {
-                this.enviarConCodigo('Numero no valido. Selecciona el catastro:');
+                this.enviarConCodigo('Número no válido. Selecciona el catastro:');
                 return;
             }
             
@@ -318,9 +318,9 @@ class WhatsAppService {
             let mensaje = `CONTRIBUYENTE: ${estado.identificador}\nCatastro: ${this.userState[from].catastroSeleccionado}\n\nSe encontraron ${tarjetas.length} tarjeta(s):\n\n`;
             tarjetas.forEach((t, i) => {
                 const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
-                mensaje += `${i + 1}. ${nombre} - ${t.CATASTRO}\n`;
+                mensaje += `${this.getNumeroEmoji(i)} ${nombre} - ${t.CATASTRO}\n`;
             });
-            mensaje += `\nT. Ver todas las cuentas (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver todas:`;
+            mensaje += `\nT. Ver todas las cuentas (T)\n\nEscribe el número de tarjeta para ver sus cuentas, o T para ver todas:`;
             
             await this.enviarConCodigo(msg, mensaje);
             this.userState[from].esperandoTarjeta = true;
@@ -336,7 +336,7 @@ class WhatsAppService {
             
             const num = parseInt(text);
             if (isNaN(num) || num < 1 || num > estado.tarjetasCatastro.length) {
-                this.enviarConCodigo('Numero no valido. Selecciona la tarjeta:');
+                this.enviarConCodigo('Número no válido. Selecciona la tarjeta:');
                 return;
             }
             
@@ -368,7 +368,7 @@ class WhatsAppService {
                 this.enviarConCodigo('Gracias por usar el servicio. Hasta luego!');
                 return;
             } else {
-                this.enviarConCodigo('Opcion no valida. Escribe S para ver detalle o N para salir.');
+                this.enviarConCodigo('Opción no válida. Escribe S para ver detalle o N para salir.');
                 return;
             }
         }
@@ -392,7 +392,7 @@ class WhatsAppService {
                 return;
             }
             
-            this.enviarConCodigo('Opcion no valida.\nEscribe 0 para reiniciar.');
+            this.enviarConCodigo('Opción no válida.\nEscribe 0 para reiniciar.');
             return;
         }
 
@@ -419,7 +419,7 @@ class WhatsAppService {
             } else {
                 const num = parseInt(text);
 if (isNaN(num) || !estado.tarjetasCatastro || num < 1 || num > estado.tarjetasCatastro.length) {
-                    this.enviarConCodigo('Numero no valido. Selecciona la tarjeta:');
+                this.enviarConCodigo('Número no válido. Selecciona la tarjeta:');
                     return;
                 }
                 // Guardar la tarjeta seleccionada y cambiar el tipo para el detalle
@@ -435,7 +435,7 @@ if (isNaN(num) || !estado.tarjetasCatastro || num < 1 || num > estado.tarjetasCa
             return;
         }
 
-        this.enviarConCodigo('Opcion no valida.\nEscribe 0 para reiniciar.');
+        this.enviarConCodigo('Opción no válida.\nEscribe 0 para reiniciar.');
     }
 
 getOpcionesConsulta(tipo, catastro) {
@@ -491,9 +491,9 @@ async enviarDepartamentos(msg) {
             
             let mensaje = `CONSULTAS DE CUENTA CORRIENTE\n\nPaso 1: Selecciona el DEPARTAMENTO\n\n`;
             deptos.forEach((d, i) => {
-                mensaje += `${i + 1}. ${d.NOMBRE}\n`;
+                mensaje += `${this.getNumeroEmoji(i)} ${d.NOMBRE}\n`;
             });
-            mensaje += '\nEscribe el numero';
+            mensaje += '\nEscribe el número';
             
             await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
@@ -517,6 +517,12 @@ async enviarDepartamentos(msg) {
         }
         
         return saludo;
+    }
+
+    getNumeroEmoji(num) {
+        const digitEmojis = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
+        const n = num + 1;
+        return String(n).split('').map(d => digitEmojis[parseInt(d)]).join('') + ' ';
     }
 
     async enviarBienvenida(msg) {
@@ -558,9 +564,9 @@ Escribe X para salir.`;
             
             let mensaje = `DEPARTAMENTO: ${estado.deptoNombre}\n\nPaso 2: Selecciona la ENTIDAD\n\n`;
             entidades.forEach((e, i) => {
-                mensaje += `${i + 1}. ${e.ENTIDAD}\n`;
+                mensaje += `${this.getNumeroEmoji(i)} ${e.ENTIDAD}\n`;
             });
-            mensaje += '\nEscribe el numero';
+            mensaje += '\nEscribe el número';
             
             await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
@@ -570,7 +576,22 @@ Escribe X para salir.`;
     }
 
     async enviarTipoBusqueda(msg) {
-        const mensaje = `ENTIDAD: ${this.userState[msg.from].entidadNombre}\n\nPaso 3: Selecciona el TIPO DE BUSQUEDA\n\n1. Por TARJETA\n   (Buscar directamente por numero de tarjeta)\n\n2. Por CATASTRO\n   (Un catastro puede tener varias tarjetas)\n\n3. Por CONTRIBYENTE (DPI)\n   (Un contribuyente puede tener varios catastros)\n\n\nEscribe el numero (1, 2 o 3)`;
+        const estado = this.userState[msg.from];
+        
+        const mensaje = `ENTIDAD: ${estado.entidadNombre}
+
+Paso 3: Selecciona el TIPO DE BUSQUEDA
+
+1️⃣ Por TARJETA
+   (Buscar directamente por numero de tarjeta)
+
+2️⃣ Por CATASTRO
+   (Un catastro puede tener varias tarjetas)
+
+3️⃣ Por CONTRIBUYENTE (DPI)
+   (Un contribuyente puede tener varios catastros)
+
+Escribe el numero (1, 2 o 3)`;
         
         await this.enviarConCodigo(msg, mensaje);
     }
@@ -596,9 +617,9 @@ this.enviarConCodigo(msg, `Has elegido: Buscar por ${tipos[text].tipo}\n\n${tipo
             
             let mensaje = `CONTRIBUYENTE: ${estado.identificador} - ${nombreCompleto}\n\nSe encontraron ${catastros.length} catastro(s):\n\n`;
             catastros.forEach((c, i) => {
-                mensaje += `${i + 1}. CATASTRO: ${c.CATASTRO}\n   Entidad: ${c.ENTIDAD}\n\n`;
+                mensaje += `${this.getNumeroEmoji(i)} CATASTRO: ${c.CATASTRO}\n   Entidad: ${c.ENTIDAD}\n\n`;
             });
-            mensaje += `T. Ver todas las tarjetas (T)\n\nEscribe el numero del catastro para ver sus cuentas, o T para ver todas:`;
+            mensaje += `T. Ver todas las tarjetas (T)\n\nEscribe el número del catastro para ver sus cuentas, o T para ver todas:`;
             
             await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
@@ -629,9 +650,10 @@ this.enviarConCodigo(msg, `Has elegido: Buscar por ${tipos[text].tipo}\n\n${tipo
                 // Formato igual que simulate.py: nombre completo + identificador de catastro
                 const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
                 const catastroIdent = t.CATASTRO || estado.identificador;
-                mensaje += `${i + 1}. ${nombre} - ${catastroIdent}\n`;
+                mensaje += `${this.getNumeroEmoji(i)} ${nombre} - ${catastroIdent}\n`;
             });
-            mensaje += `\nT. Ver todas las cuentas del catastro (T)\n\nEscribe el numero de tarjeta para ver sus cuentas, o T para ver el resumen completo del catastro:`;
+			
+            mensaje += `\nEscribe el número de tarjeta para ver sus cuentas, o T para ver el resumen completo del catastro:`;
             
             await this.enviarConCodigo(msg, mensaje);
             this.userState[from].esperandoTarjeta = true;
@@ -670,8 +692,8 @@ Tipo: ${tipo}
 ${idMostrar}
 
 Paso 4: Selecciona la consulta:
-1. Cuentas Pendientes
-2. Generar Documento de Cobro
+1️⃣ Cuentas Pendientes
+2️⃣ Generar Documento de Cobro
 
 0. Reiniciar
 X. Salir`;
@@ -688,9 +710,9 @@ X. Salir`;
             // Formato: numero + nombre completo + catastro (identificador)
             const nombre = `${t.NOMBRE || ''} ${t.APELLIDO_PATERNO || ''} ${t.APELLIDO_MATERNO || ''}`.trim();
             const catastro = t.CATASTRO || estado.identificador;
-            mensaje += `${i + 1}. ${nombre} - ${catastro}\n`;
+            mensaje += `${this.getNumeroEmoji(i)} ${nombre} - ${catastro}\n`;
         });
-        mensaje += `\nT. Ver todas las tarjetas\n\nEscribe el numero de la tarjeta:`;
+        mensaje += `\nT. Ver todas las tarjetas\n\nEscribe el número de la tarjeta:`;
         
         await this.enviarConCodigo(msg, mensaje);
         this.userState[from].solicitandoDetalleTarjeta = true;
