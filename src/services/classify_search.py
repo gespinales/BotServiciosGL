@@ -2,49 +2,46 @@
 import sys
 import os
 import json
-import ollama
+import re
 
 def classify_search_intent(user_message):
     """
-    Usa Ollama para clasificar la intención de búsqueda.
-    Retorna: {'tipo': 'TARJETA'|'CATASTRO'|'CONTRIBUYENTE'|None, 'identificador': str|None}
+    Clasifica el tipo de búsqueda basado en palabras clave.
+    Extrae identificador con regex.
     """
-    prompt = """Extrae tipo e identificador de: "{}"
-
-Responde JSON:
-{{"tipo": "TARJETA"|"CATASTRO"|"CONTRIBUYENTE"|"", "identificador": "valor"|""}}
-
-Ejemplos:
-"por tarjeta 12345" -> {{"tipo": "TARJETA", "identificador": "12345"}}
-"catastro 11608-721-122E" -> {{"tipo": "CATASTRO", "identificador": "11608-721-122E"}}
-"DPI 1234567890123" -> {{"tipo": "CONTRIBUYENTE", "identificador": "1234567890123"}}
-"por tarjeta" -> {{"tipo": "TARJETA", "identificador": ""}}""".format(user_message)
+    text_upper = user_message.upper()
     
-    try:
-        response = ollama.generate(
-            model='llama3.2:1b',
-            prompt=prompt,
-            system="Eres un asistente que responde solo con JSON válido.",
-            options={'temperature': 0, 'num_predict': 100}
-        )
-        
-        text = response['response'].strip()
-        
-        # Buscar JSON en la respuesta
-        start = text.find('{')
-        end = text.rfind('}') + 1
-        
-        if start >= 0 and end > start:
-            json_str = text[start:end]
-            # Reemplazar comillas simples por dobles si es necesario
-            json_str = json_str.replace("'", '"')
-            result = json.loads(json_str)
-            return result
-        
-        return {'tipo': None, 'identificador': None}
-    except Exception as e:
-        sys.stderr.write("ERROR: {}\n".format(str(e)))
-        return {'tipo': None, 'identificador': None}
+    # 1. Determinar tipo por palabras clave
+    tipo = None
+    if re.search(r'\b(TARJETA|TARJETAS)\b', text_upper):
+        tipo = 'TARJETA'
+    elif re.search(r'\b(CATASTRO|CATASTRAL)\b', text_upper):
+        tipo = 'CATASTRO'
+    elif re.search(r'\b(CONTRIBUYENTE|DPI|CEDULA)\b', text_upper):
+        tipo = 'CONTRIBUYENTE'
+    
+    # 2. Extraer identificador con regex
+    identifier = None
+    
+    # Patrones específicos (orden: del más específico al general)
+    patrones = [
+        r'\b([A-Z0-9]{2,10}-[A-Z0-9]{1,10}-[A-Z0-9]{1,10}-[A-Z0-9]{1,10})\b',  # Catastro: 09-01-U01-196852
+        r'\b(\d{5}-\d{3}-\d{3}[A-Z]?)\b',         # Catastro: 12345-678-901A
+        r'\b(\d{13})\b',                           # DPI: 13 dígitos
+        r'\b([A-Z0-9]{1,10}-[A-Z0-9]{1,10})\b',  # Con guión: A123-1, 196852-000031
+        r'\b([A-Z]\d{1,6})\b',                  # Sin guión: A124, B456 (letra + dígitos)
+    ]
+    
+    for patron in patrones:
+        match = re.search(patron, text_upper)
+        if match:
+            identifier = match.group(1)
+            break
+    
+    return {
+        'tipo': tipo,
+        'identificador': identifier
+    }
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
