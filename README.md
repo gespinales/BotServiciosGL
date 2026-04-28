@@ -20,11 +20,11 @@ Agente conversacional que permite consultar cuentas pendientes de impuestos y se
 Este bot permite a los contribuyentes consultar el estado de sus cuentas pendientes (impuestos, arbitrios, tasas) sin necesidad de presentarse a una oficina municipal. El usuario inicia una conversación por WhatsApp y sigue un flujo guiado de 4 pasos:
 
 1. Seleccionar el departamento (municipalidad)
-2. Seleccionar la entidad (área within la municipio)
+2. Seleccionar la entidad (área dentro de la municipalidad)
 3. Elegir tipo de búsqueda (número de tarjeta, catastro o DPI)
 4. Ingresar el identificador correspondiente
 
-El sistema返回值 un resumen agrupado por concepto de cobro y permite profundizar al detalle por tarjeta específica.
+El sistema devuelve un resumen agrupado por concepto de cobro y permite profundizar al detalle por tarjeta específica.
 
 ---
 
@@ -45,7 +45,7 @@ El sistema返回值 un resumen agrupado por concepto de cobro y permite profundi
 | Tecnología | Propósito | Versión |
 |------------|----------|---------|
 | **Node.js** | Runtime de JavaScript | 18+ |
-| **whatsapp-web.js** | Cliente de WhatsApp Web (Baileys) | 1.x |
+| **whatsapp-web.js** | Cliente de WhatsApp Web | 1.x |
 | **Puppeteer** | Navegador headless para WhatsApp Web | 21.x |
 | **QRCode** | Generación de códigos QR | - |
 
@@ -65,7 +65,7 @@ El sistema返回值 un resumen agrupado por concepto de cobro y permite profundi
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    WhatsApp Bot (Node.js)                       │
-│                  whatsapp/service.cjs (Baileys)                    │
+│                  whatsapp/service.cjs (whatsapp-web.js)                    │
 │                                                                 │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
 │  │ Flujo de    │    │ Session     │    │ Python      │       │
@@ -96,7 +96,7 @@ El sistema返回值 un resumen agrupado por concepto de cobro y permite profundi
 1. **WhatsApp Bot (Node.js)**
    - Maneja la sesión de WhatsApp Web
    - Gestiona el flujo conversacional de 4 pasos
-   - Envía mensajes usando la librería Baileys
+   - Envía mensajes usando la librería whatsapp-web.js
    - Ejecuta scripts Python para consultas
 
 2. **Query Router (Python)**
@@ -188,6 +188,99 @@ CPR_DEPARTAMENTO (CODIGO_DEPARTAMENTO)
 
 ### Ejemplo de Conversación
 
+```
+Usuario: Hola
+Bot: ¡Buenos días!
+    Soy el asistente de consultas de Cuenta Corriente.
+    Puedo ayudarte a consultar: Cuentas pendientes
+    Escribe 0 para reiniciar o X para salir.
+
+Bot: Paso 1: Selecciona el DEPARTAMENTO
+    1️⃣ Guatemala
+    2️⃣ Escuintla
+    ...
+
+Usuario: 1
+
+Bot: DEPARTAMENTO: Guatemala
+    Paso 2: Selecciona la ENTIDAD
+    1️⃣ Servicio de Agua
+    2️⃣ Impuesto Único
+    ...
+
+Usuario: 1
+
+Bot: ENTIDAD: Servicio de Agua
+    Paso 3: Selecciona el TIPO DE BÚSQUEDA
+    1️⃣ Por TARJETA
+    2️⃣ Por CATASTRO
+    3️⃣ Por CONTRIBUYENTE (DPI)
+
+Usuario: 2
+
+Bot: Has elegido: Buscar por CATASTRO
+    Ingresa el NÚMERO DE CATASTRO:
+    (Escribe X para reiniciar)
+
+Usuario: 11608-721-122E
+
+Bot: CATASTRO: 11608-721-122E
+    Se encontraron 2 tarjeta(s) en este catastro:
+    1️⃣ TARJETA: 12345   Nombre: JUAN PEREZ
+    2️⃣ TARJETA: 67890   Nombre: MARIA LOPEZ
+
+    T. Ver todas las cuentas del catastro (T)
+
+Usuario: T
+
+Bot: Paso 4: Selecciona la consulta:
+    1️⃣ Cuentas Pendientes
+    2️⃣ Generar Documento de Cobro
+
+    0. Reiniciar
+    X. Salir
+
+Usuario: 1
+
+Bot: Cuentas Pendientes
+    Depto: Guatemala | Entidad: Servicio de Agua
+    Tipo: CATASTRO
+    ID: 11608-721-122E
+
+    RESUMEN:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Concepto: AGUA POTABLE - Tasa de Mantenimiento
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Tarjeta: 12345 - JUAN PEREZ
+      Total cuentas: 3
+      Monto total: Q. 450.00
+
+    Tarjeta: 67890 - MARIA LOPEZ
+      Total cuentas: 2
+      Monto total: Q. 300.00
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    TOTAL: Q. 750.00 (5 cuentas pendientes)
+
+    Deseas ver el DETALLE?
+
+    1️⃣ 12345 - JUAN PEREZ
+    2️⃣ 67890 - MARIA LOPEZ
+    T. Ver todas las tarjetas
+
+    Escribe el número de la tarjeta:
+
+Usuario: 1
+
+Bot: DETALLE: Cuentas Pendientes
+    Tarjeta: 12345 - JUAN PEREZ
+
+    1️⃣ AGUA POTABLE - Tasa de Mantenimiento
+       Periodo: ENE-2024
+       Monto: Q. 150.00
+       Estado: POR_PAGAR
+       Vence: 15/02/2024
+    ...
 ```
 Usuario: Hola
 Bot: ¡Buenos días!
