@@ -218,54 +218,79 @@ class WhatsAppService {
             // Paso 3: Intentar Ollama primero (modo híbrido)
             const clasificacion = await this.clasificarBusqueda(msg.body);
             
-            if (clasificacion && clasificacion.tipo && tipos[clasificacion.tipo]) {
+            // clasificacion puede ser un array (múltiples consultas) o un objeto (una sola)
+            const consultas = Array.isArray(clasificacion) ? clasificacion : [clasificacion];
+            
+            // BUSCAR CONSULTA CON IDENTIFICADOR ESPECÍFICO (prioridad por especificidad)
+            // CATASTRO > TARJETA > CONTRIBUYENTE (más específico a menos específico)
+            let consultaValida = null;
+            
+            // Primero buscar CATASTRO con identificador
+            consultaValida = consultas.find(c => c && c.tipo === 'CATASTRO' && c.identificador && c.identificador.length >= 3);
+            
+            // Si no hay CATASTRO, buscar TARJETA con identificador
+            if (!consultaValida) {
+                consultaValida = consultas.find(c => c && c.tipo === 'TARJETA' && c.identificador && c.identificador.length >= 3);
+            }
+            
+            // Si no hay TARJETA, buscar CONTRIBUYENTE con identificador
+            if (!consultaValida) {
+                consultaValida = consultas.find(c => c && c.tipo === 'CONTRIBUYENTE' && c.identificador && c.identificador.length >= 3);
+            }
+            
+            // Si no hay ninguna con identificador, tomar la primera válida
+            if (!consultaValida) {
+                consultaValida = consultas.find(c => c && c.tipo && tipos[c.tipo]);
+            }
+            
+            if (consultaValida) {
                 // Ollama identificó el tipo de búsqueda
-                const tipoInfo = tipos[clasificacion.tipo];
+                const tipoInfo = tipos[consultaValida.tipo];
                 this.userState[from].tipoBusqueda = tipoInfo.tipo;
                 this.userState[from].promptBusqueda = tipoInfo.prompt;
                 
                 // Solo mostrar mensaje de espera si NO se proporcionó identificador
-                if (!clasificacion.identificador || clasificacion.identificador.length < 3) {
+                if (!consultaValida.identificador || consultaValida.identificador.length < 3) {
                     this.enviarConCodigo(msg, `Has elegido (IA): Buscar por ${tipoInfo.tipo}\n\n${tipoInfo.prompt}\n(Escribe X para reiniciar)`);
                 } else {
                     this.enviarConCodigo(msg, `Has elegido (IA): Buscar por ${tipoInfo.tipo}`);
                 }
                 
-                    // Si Ollama también identificó el identificador, procesarlo directamente
-                    if (clasificacion.identificador && clasificacion.identificador.length >= 3) {
-                        this.userState[from].identificador = clasificacion.identificador.toUpperCase();
-                        
-                        if (tipoInfo.tipo === 'CONTRIBUYENTE') {
-                            await this.buscarContribuyente(msg, from);
-                        } else if (tipoInfo.tipo === 'CATASTRO') {
-                            await this.mostrarTarjetasCatastro(msg, from);
-                        } else if (tipoInfo.tipo === 'TARJETA') {
-                            const respuesta = await this.ejecutarPython('id_tarjeta_por_identificador', {
-                                identificador: clasificacion.identificador,
-                                id_entidad: this.userState[from].entidadId
-                            });
-                            console.log(`[TARJETA-IA] Buscando tarjeta: ${clasificacion.identificador}, Respuesta: ${respuesta}`);
-                            // Manejar respuesta no-JSON (texto plano)
-                            let tarjetas = [];
-                            try {
-                                if (respuesta.trim().startsWith('[')) {
-                                    tarjetas = JSON.parse(respuesta.trim());
-                                }
-                            } catch (e) {
-                                // Respuesta no es JSON válido
+                // Si Ollama también identificó el identificador, procesarlo directamente
+                if (consultaValida.identificador && consultaValida.identificador.length >= 3) {
+                    this.userState[from].identificador = consultaValida.identificador.toUpperCase();
+                    
+                    if (tipoInfo.tipo === 'CONTRIBUYENTE') {
+                        await this.buscarContribuyente(msg, from);
+                    } else if (tipoInfo.tipo === 'CATASTRO') {
+                        await this.mostrarTarjetasCatastro(msg, from);
+                    } else if (tipoInfo.tipo === 'TARJETA') {
+                        const respuesta = await this.ejecutarPython('id_tarjeta_por_identificador', {
+                            identificador: consultaValida.identificador,
+                            id_entidad: this.userState[from].entidadId
+                        });
+                        console.log(`[TARJETA-IA] Buscando tarjeta: ${consultaValida.identificador}, Respuesta: ${respuesta}`);
+                        // Manejar respuesta no-JSON (texto plano)
+                        let tarjetas = [];
+                        try {
+                            if (respuesta.trim().startsWith('[')) {
+                                tarjetas = JSON.parse(respuesta.trim());
                             }
-                            if (!tarjetas || tarjetas.length === 0) {
-                                this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
-                                delete this.userState[from].identificador;
-                                return;
-                            }
-                            this.userState[from].tarjetaId = String(tarjetas[0].ID_TARJETA);
-                            this.userState[from].id_servicio = String(tarjetas[0].ID_SERVICIO_CATASTRO);
-                            this.userState[from].tarjetaSeleccionada = clasificacion.identificador;
-                            await this.enviarMenu(msg, from);
+                        } catch (e) {
+                            // Respuesta no es JSON válido
                         }
-                        return;
+                        if (!tarjetas || tarjetas.length === 0) {
+                            this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
+                            delete this.userState[from].identificador;
+                            return;
+                        }
+                        this.userState[from].tarjetaId = String(tarjetas[0].ID_TARJETA);
+                        this.userState[from].id_servicio = String(tarjetas[0].ID_SERVICIO_CATASTRO);
+                        this.userState[from].tarjetaSeleccionada = consultaValida.identificador;
+                        await this.enviarMenu(msg, from);
                     }
+                    return;
+                }
                 return;
             }
             
@@ -647,9 +672,10 @@ Escribe X para salir.`;
                 proc.on('close', () => {
                     try {
                         const parsed = JSON.parse(output.trim());
-                        resolve(parsed);
+                        // Ensure we always return an array for consistency
+                        resolve(Array.isArray(parsed) ? parsed : [parsed]);
                     } catch (e) {
-                        resolve({ tipo: null, identificador: null });
+                        resolve([]);
                     }
                 });
             });
