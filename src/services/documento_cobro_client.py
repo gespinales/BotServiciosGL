@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_BASE_URL = os.getenv("DOCUMENTO_COBRO_API_URL", "http://localhost:5562")
-API_USER = os.getenv("DOCUMENTO_COBRO_USER", "sias")
-API_PASSWORD = os.getenv("DOCUMENTO_COBRO_PASSWORD", "Password.Secreto")
+API_BASE_URL = os.getenv("DOCUMENTO_COBRO_API_URL")
+API_USER = os.getenv("DOCUMENTO_COBRO_USER")
+API_PASSWORD = os.getenv("DOCUMENTO_COBRO_PASSWORD")
 
 
 class DocumentoCobroClient:
