@@ -419,7 +419,56 @@ Las queries están definidas en `config/queries.json`. Cada query tiene:
 
 ---
 
-## Ejecución
+## Dockerización
+
+### Requisitos
+- Docker Desktop instalado
+- Ollama corriendo localmente (para intención)
+
+### Comandos
+
+```bash
+# Construir y ejecutar
+docker-compose up -d --build
+
+# Ver contenedor
+docker ps
+
+# Ver logs
+docker logs bot-servicios-gl
+
+# Detener
+docker-compose down
+```
+
+### Notas Importantes
+- **Imagen Local**: `botserviciosgl-botwhatsapp:latest` (no se sube a Docker Hub)
+- **QR Code**: Se genera en `./data/qr.png` dentro del contenedor
+  - Copiar a tu máquina: `docker cp bot-servicios-gl:/app/data/qr.png ./data/qr.png`
+  - Abrir: `start "" "C:\BotServiciosGL\data\qr.png"`
+- **Sesión Persistente**: 
+  - Los datos se montan en `./data:/app/data`
+  - ⚠️ **Pendiente**: Después de cada `rebuild`, puede requerir escanear QR nuevamente
+  - Recomendación: Usar `baileys` en futuro para mejor manejo de sesiones
+- **Red**: Usa `network_mode: "host"` (los puertos no se muestran en `docker ps`)
+- **Ollama**: Configurado para conectar a `host.docker.internal:11434`
+
+### Estructura Docker
+```
+BotServiciosGL/
+├── Dockerfile              # Imagen: Python 3.10 + Node.js 18 + Chrome + Oracle Instant Client
+├── docker-compose.yml      # Configuración con volúmenes y red
+├── entrypoint.sh          # Script de inicio con Xvfb
+├── .dockerignore          # Optimización de build
+└── data/
+    ├── session/           # Sesión de WhatsApp (persistente)
+    ├── qr.png            # Código QR generado
+    └── documentos/        # PDFs generados
+```
+
+---
+
+## Ejecución (Modo Tradicional)
 
 ### Iniciar el Bot
 
