@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  botwhatsapp:
+    build: .
+    container_name: bot-servicios-gl
+    restart: "no"
+    ports:
+      - "3000:3000"
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_MODEL=llama3.2:1b
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - ORACLE_DSN=${ORACLE_DSN}
+      - WHATSAPP_SESSION=/app/data/session
+    volumes:
+      - ./data:/app/data
+      # Mount data directory for session persistence and QR access
+    network_mode: "host"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  bot-data:
+    driver: local

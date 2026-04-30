@@ -1,4 +1,5 @@
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import whatsappWeb from 'whatsapp-web.js';
+const { Client, LocalAuth } = whatsappWeb;
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -15,13 +16,37 @@ class WhatsAppService {
     }
 
     async connect() {
+        if (this.client) {
+            console.log('Client already exists, skipping initialization');
+            return;
+        }
+
+        const sessionPath = path.join(__dirname, '..', 'data', 'session');
+        
+        console.log(`Using session path: ${sessionPath}`);
+        
+        // Clean up any existing lock files
+        try {
+            fs.rmSync(path.join(sessionPath, 'session', 'SingletonLock'), { force: true });
+            fs.rmSync(path.join(sessionPath, 'session', 'SingletonCookie'), { force: true });
+            fs.rmSync(path.join(sessionPath, 'session', 'SingletonSocket'), { force: true });
+        } catch (e) {
+            // ignore
+        }
+        
         this.client = new Client({
             authStrategy: new LocalAuth({
-                dataPath: './data/session'
+                dataPath: sessionPath
             }),
             puppeteer: {
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-software-rasterizer'
+                ]
             }
         });
 
@@ -33,15 +58,6 @@ class WhatsAppService {
             await QRCode.toFile(qrPath, qr);
             console.log(`QR guardado en: ${qrPath}`);
             console.log('Abre el archivo para escanearlo con WhatsApp\n');
-            
-            const readline = await import('readline');
-            const rl = readline.createInterface({
-                input: process.stdin,
-                output: process.stdout
-            });
-            rl.question('Presiona Enter después de escanear el QR...', () => {
-                rl.close();
-            });
         });
 
         this.client.on('ready', () => {

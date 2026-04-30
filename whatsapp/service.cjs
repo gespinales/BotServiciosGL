@@ -1,4 +1,5 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const whatsappWeb = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = whatsappWeb;
 const { spawn } = require('child_process');
 const path = require('path');
 const QRCode = require('qrcode');

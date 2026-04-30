@@ -1,4 +1,4 @@
-import whatsapp from './service.js';
+import whatsapp from './service.cjs';
 
 console.log('Iniciando Agente IA SQL + WhatsApp...');
 

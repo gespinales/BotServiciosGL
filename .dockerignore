@@ -1,0 +1,13 @@
+node_modules
+__pycache__
+*.pyc
+.env
+data/session
+data/documentos/*.pdf
+*.log
+.git
+.gitignore
+.wwebjs_cache
+*.bat
+.vscode
+.idea

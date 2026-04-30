@@ -1,9 +1,9 @@
 {
   "name": "whatsapp-bot",
   "version": "1.0.0",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
-    "start": "node whatsapp/bot.cjs"
+    "start": "node whatsapp/bot.js"
   },
   "dependencies": {
     "whatsapp-web.js": "^1.23.0",
