@@ -21,7 +21,7 @@ class WhatsAppService {
             console.log(texto);
             return;
         }
-        return msg.reply("```\n" + texto + "\n```");
+        return msg.reply(texto);
     }
     
     verificarTimeout(from) {
