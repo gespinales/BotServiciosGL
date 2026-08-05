@@ -1,0 +1,79 @@
+# ============================================================
+# Bot WhatsApp BotServiciosGL - namespace botserviciosgl-wa
+# El pod se conecta al AMBIENTE DE QA:
+#   - Oracle QA: 172.18.28.233:1521/PDBQA (secret 'oracle-credentials')
+#   - Ollama interno: http://ollama:11434 (service del namespace)
+# Imagen: desde Nexus (secret 'nexus-registry')
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-whatsapp
+  namespace: botserviciosgl-wa
+  labels:
+    app: bot-whatsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bot-whatsapp
+  template:
+    metadata:
+      labels:
+        app: bot-whatsapp
+    spec:
+      imagePullSecrets:
+        - name: nexus-registry
+      containers:
+        - name: bot-whatsapp
+          image: srv-osnexus01.minfin.gob.gt:8006/botserviciosgl-wa:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOME
+              value: "/tmp"
+            - name: OLLAMA_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: bot-whatsapp-config
+                  key: OLLAMA_HOST
+            - name: OLLAMA_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: bot-whatsapp-config
+                  key: OLLAMA_MODEL
+            - name: WHATSAPP_SESSION
+              valueFrom:
+                configMapKeyRef:
+                  name: bot-whatsapp-config
+                  key: WHATSAPP_SESSION
+            # Credenciales Oracle del AMBIENTE DE QA (172.18.28.233:1521/PDBQA)
+            - name: ORACLE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_USER
+            - name: ORACLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_PASSWORD
+            - name: ORACLE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_DSN
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bot-whatsapp-data
+      restartPolicy: Always

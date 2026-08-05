@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: botserviciosgl-wa
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      imagePullSecrets:
+        - name: nexus-registry
+      containers:
+        - name: ollama
+          image: srv-osnexus01.minfin.gob.gt:8006/botserviciosgl-wa/ollama:0.6.5
+          ports:
+            - containerPort: 11434
+              name: api
+          env:
+            - name: HOME
+              value: "/tmp"
+            - name: OLLAMA_MODELS
+              value: "/app/models"
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
+            - name: GODEBUG
+              value: "multipathtcp=0"
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: ollama-models
+      restartPolicy: Always

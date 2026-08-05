@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bot-whatsapp-data
+  namespace: botserviciosgl-wa
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  # Si tu cluster usa una StorageClass específica, descomenta:
+  # storageClassName: nfs-client

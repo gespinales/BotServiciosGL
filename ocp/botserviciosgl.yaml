@@ -1,0 +1,189 @@
+# ============================================================
+# Despliegue completo BotServiciosGL en OKD/OpenShift
+# Aplicar:  oc apply -f ocp/botserviciosgl.yaml
+# Requisitos previos (ya creados manualmente):
+#   - Secret 'nexus-registry' (docker-registry con credenciales Nexus)
+#   - Secret 'oracle-credentials' (ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN)
+#
+# ⚠️ El pod del bot se conecta al AMBIENTE DE QA:
+#      Oracle QA -> 172.18.28.233:1521/PDBQA
+#      (pendiente que la red habilite la ruta desde la subred de pods)
+# ============================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bot-whatsapp-config
+  namespace: botserviciosgl-wa
+data:
+  OLLAMA_HOST: "http://ollama:11434"
+  OLLAMA_MODEL: "llama3.2:1b"
+  WHATSAPP_SESSION: "/app/data/session"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bot-whatsapp-data
+  namespace: botserviciosgl-wa
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  namespace: botserviciosgl-wa
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: botserviciosgl-wa
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      imagePullSecrets:
+        - name: nexus-registry
+      containers:
+        - name: ollama
+          image: srv-osnexus01.minfin.gob.gt:8006/botserviciosgl-wa/ollama:0.6.5
+          ports:
+            - containerPort: 11434
+              name: api
+          env:
+            - name: HOME
+              value: "/tmp"
+            - name: OLLAMA_MODELS
+              value: "/app/models"
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
+            - name: GODEBUG
+              value: "multipathtcp=0"
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: ollama-models
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: botserviciosgl-wa
+spec:
+  selector:
+    app: ollama
+  ports:
+    - port: 11434
+      targetPort: 11434
+      protocol: TCP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-whatsapp
+  namespace: botserviciosgl-wa
+  labels:
+    app: bot-whatsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bot-whatsapp
+  template:
+    metadata:
+      labels:
+        app: bot-whatsapp
+    spec:
+      imagePullSecrets:
+        - name: nexus-registry
+      containers:
+        - name: bot-whatsapp
+          image: srv-osnexus01.minfin.gob.gt:8006/botserviciosgl-wa:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOME
+              value: "/tmp"
+            - name: OLLAMA_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: bot-whatsapp-config
+                  key: OLLAMA_HOST
+            - name: OLLAMA_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: bot-whatsapp-config
+                  key: OLLAMA_MODEL
+            - name: WHATSAPP_SESSION
+              valueFrom:
+                configMapKeyRef:
+                  name: bot-whatsapp-config
+                  key: WHATSAPP_SESSION
+            # Credenciales Oracle del AMBIENTE DE QA (172.18.28.233:1521/PDBQA)
+            - name: ORACLE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_USER
+            - name: ORACLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_PASSWORD
+            - name: ORACLE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: ORACLE_DSN
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bot-whatsapp-data
+      restartPolicy: Always

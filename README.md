@@ -387,6 +387,7 @@ Crear archivo `.env` en la raíz del proyecto:
 # Oracle Database
 ORACLE_USER=SERVICIOS
 ORACLE_PASSWORD=TU_PASSWORD_AQUI
+# Ambiente de QA (PDBQA)
 ORACLE_DSN=172.18.28.233:1521/PDBQA
 
 # WhatsApp (opcional, usa path por defecto)
@@ -465,6 +466,36 @@ BotServiciosGL/
     ├── qr.png            # Código QR generado
     └── documentos/        # PDFs generados
 ```
+
+---
+
+## Despliegue en OKD/OpenShift
+
+El bot está desplegado en el namespace `botserviciosgl-wa` del cluster OKD. El pod se conecta al **ambiente de QA**:
+
+| Recurso externo | Ambiente | Endpoint |
+| --- | --- | --- |
+| Oracle Database | **QA** | `172.18.28.233:1521/PDBQA` (secret `oracle-credentials`) |
+| Ollama | Interno al cluster | `http://ollama:11434` (service del namespace) |
+| Nexus (imágenes) | Corporativo | `srv-osnexus01.minfin.gob.gt:8006` |
+
+> ⚠️ **Conexión a QA**: el pod del bot consulta la base Oracle del **ambiente de QA** (`PDBQA`). Está pendiente que la red habilite la ruta desde la subred de pods hacia `172.18.28.233:1521` (actualmente responde `ECONNREFUSED`).
+
+### Archivos de despliegue (`ocp/`)
+
+- `00-configmap.yaml`: ConfigMap `bot-whatsapp-config` (Ollama interno, modelo, sesión)
+- `01-pvc-bot.yaml` y `02-pvc-ollama.yaml`: PVCs de datos del bot y de modelos de Ollama
+- `03-deployment-ollama.yaml`: Ollama 0.6.5 (imagen desde Nexus)
+- `04-service-ollama.yaml`: Service interno `ollama:11434`
+- `05-deployment-bot.yaml`: Bot WhatsApp (imagen desde Nexus)
+- `07-deploy.sh`: Script completo de despliegue
+
+### Notas OKD
+
+- **Imágenes**: se suben a Nexus y los deployments referencian `imagePullSecrets: nexus-registry`
+- **MPTCP**: OKD 4.10 (kernel RHEL 4.18) no soporta el MPTCP que Go habilita por defecto. Ollama requiere `GODEBUG=multipathtcp=0`, de lo contrario el servidor resetea todas las conexiones.
+- **PVC RWO**: el deployment de Ollama usa `strategy: Recreate` (un solo pod a la vez).
+- **Ollama interno**: sirve el modelo `llama3.2:1b` desde el PVC `ollama-models`.
 
 ---
 
