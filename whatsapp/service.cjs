@@ -67,7 +67,7 @@ class WhatsAppService {
             },
             webVersionCache: {
                 type: 'local',
-                path: './.wwebjs_cache'
+                path: './data/.wwebjs_cache'
             }
         });
 
