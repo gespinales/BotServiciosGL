@@ -388,7 +388,9 @@ Crear archivo `.env` en la raíz del proyecto:
 ORACLE_USER=SERVICIOS
 ORACLE_PASSWORD=TU_PASSWORD_AQUI
 # Ambiente de QA (PDBQA)
-ORACLE_DSN=172.20.1.233:1521/PDBQA
+# - Ejecucion LOCAL: usar la NAT 172.18.28.233 (alcanzable desde la red local)
+# - Cluster OKD: se usa la IP INTERNA 172.20.1.233 (via secret 'oracle-credentials')
+ORACLE_DSN=172.18.28.233:1521/PDBQA
 
 # WhatsApp (opcional, usa path por defecto)
 WHATSAPP_SESSION=./data/session
