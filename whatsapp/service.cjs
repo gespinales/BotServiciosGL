@@ -915,8 +915,8 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             // Enviar mensaje de espera
             await this.enviarConCodigo(msg, `Generando documento de cobro para ${idsCuentas.length} cuenta(s)...`);
             
-            // URL del API
-            const apiUrl = 'http://localhost:5562/api/comunicabanco/consultareporte';
+            // URL del API (AMBIENTE QA)
+            const apiUrl = 'https://serviciosglqa.minfin.gob.gt/CoreGL/api/comunicabanco/consultareporte';
             
             // Preparar JSON body
             const body = JSON.stringify({
