@@ -38,8 +38,9 @@ oc create namespace "$NAMESPACE" 2>/dev/null || true
 #     --docker-email=TU_EMAIL \
 #     -n "$NAMESPACE"
 
-# Credenciales Oracle del AMBIENTE DE QA (172.18.28.233:1521/PDBQA)
-# ORACLE_DSN debe apuntar a QA, ej: 172.18.28.233:1521/PDBQA
+# Credenciales Oracle del AMBIENTE DE QA (172.20.1.233:1521/PDBQA - IP interna)
+# ORACLE_DSN debe apuntar a QA por su IP interna, ej: 172.20.1.233:1521/PDBQA
+# (la IP 172.18.28.233 es la NAT pública y NO es alcanzable desde la subred de pods)
 oc create secret generic oracle-credentials \
     --from-literal=ORACLE_USER="$ORACLE_USER" \
     --from-literal=ORACLE_PASSWORD="$ORACLE_PASSWORD" \

@@ -86,7 +86,7 @@ El sistema devuelve un resumen agrupado por concepto de cobro y permite profundi
                               │ SQL
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                 Oracle Database (172.18.28.233)                  │
+│                 Oracle Database (172.20.1.233)                  │
 │                       SERVICE: PDBQA                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -388,7 +388,7 @@ Crear archivo `.env` en la raíz del proyecto:
 ORACLE_USER=SERVICIOS
 ORACLE_PASSWORD=TU_PASSWORD_AQUI
 # Ambiente de QA (PDBQA)
-ORACLE_DSN=172.18.28.233:1521/PDBQA
+ORACLE_DSN=172.20.1.233:1521/PDBQA
 
 # WhatsApp (opcional, usa path por defecto)
 WHATSAPP_SESSION=./data/session
@@ -475,11 +475,11 @@ El bot está desplegado en el namespace `botserviciosgl-wa` del cluster OKD. El 
 
 | Recurso externo | Ambiente | Endpoint |
 | --- | --- | --- |
-| Oracle Database | **QA** | `172.18.28.233:1521/PDBQA` (secret `oracle-credentials`) |
+| Oracle Database | **QA** | `172.20.1.233:1521/PDBQA` (IP interna; la NAT pública es `172.18.28.233`) (secret `oracle-credentials`) |
 | Ollama | Interno al cluster | `http://ollama:11434` (service del namespace) |
 | Nexus (imágenes) | Corporativo | `srv-osnexus01.minfin.gob.gt:8006` |
 
-> ⚠️ **Conexión a QA**: el pod del bot consulta la base Oracle del **ambiente de QA** (`PDBQA`). Está pendiente que la red habilite la ruta desde la subred de pods hacia `172.18.28.233:1521` (actualmente responde `ECONNREFUSED`).
+> ✅ **Conexión a QA**: el pod consulta la base Oracle del **ambiente de QA** (`PDBQA`) por su **IP interna** `172.20.1.233:1521` (la IP `172.18.28.233` es la NAT pública y no es alcanzable desde la subred de pods). Conexión verificada (`SELECT SYSDATE` OK).
 
 ### Archivos de despliegue (`ocp/`)
 

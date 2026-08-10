@@ -1,7 +1,7 @@
 # ============================================================
 # Bot WhatsApp BotServiciosGL - namespace botserviciosgl-wa
 # El pod se conecta al AMBIENTE DE QA:
-#   - Oracle QA: 172.18.28.233:1521/PDBQA (secret 'oracle-credentials')
+#   - Oracle QA: 172.20.1.233:1521/PDBQA (IP interna; la NAT pública es 172.18.28.233)
 #   - Ollama interno: http://ollama:11434 (service del namespace)
 # Imagen: desde Nexus (secret 'nexus-registry')
 # ============================================================
@@ -47,7 +47,7 @@ spec:
                 configMapKeyRef:
                   name: bot-whatsapp-config
                   key: WHATSAPP_SESSION
-            # Credenciales Oracle del AMBIENTE DE QA (172.18.28.233:1521/PDBQA)
+            # Credenciales Oracle del AMBIENTE DE QA (172.20.1.233:1521/PDBQA)
             - name: ORACLE_USER
               valueFrom:
                 secretKeyRef:
