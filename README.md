@@ -384,13 +384,13 @@ Bot: DETALLE: Cuentas Pendientes
 Crear archivo `.env` en la raíz del proyecto:
 
 ```env
-# Oracle Database
+# Oracle Database (AMBIENTE QA - PDBQA)
 ORACLE_USER=SERVICIOS
 ORACLE_PASSWORD=TU_PASSWORD_AQUI
-# Ambiente de QA (PDBQA)
-# - Ejecucion LOCAL: usar la NAT 172.18.28.233 (alcanzable desde la red local)
-# - Cluster OKD: se usa la IP INTERNA 172.20.1.233 (via secret 'oracle-credentials')
-ORACLE_DSN=172.18.28.233:1521/PDBQA
+# IP INTERNA de QA (alcanzable desde el cluster OKD)
+ORACLE_DSN=172.20.1.233:1521/PDBQA
+# Nota: si ejecutas LOCALMENTE y no alcanzas la IP interna,
+# usa la NAT de QA: 172.18.28.233:1521/PDBQA
 
 # WhatsApp (opcional, usa path por defecto)
 WHATSAPP_SESSION=./data/session
