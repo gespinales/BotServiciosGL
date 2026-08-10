@@ -497,6 +497,21 @@ El bot está desplegado en el namespace `botserviciosgl-wa` del cluster OKD. El 
 - **PVC RWO**: el deployment de Ollama usa `strategy: Recreate` (un solo pod a la vez).
 - **Ollama interno**: sirve el modelo `llama3.2:1b` desde el PVC `ollama-models`.
 
+### ⚠️ WhatsApp: bloqueo por IP de salida (datacenter) — RESUELTO
+
+La **IP pública de salida del cluster** (egress NAT del datacenter) estuvo marcada por la política anti-abuso de WhatsApp:
+
+- Rechazaba vincular dispositivos nuevos desde esa IP (`"can't link new devices right now, try again later"`).
+- Descartaba las sesiones vinculadas que se usaran desde esa IP (el pod recibía `WhatsApp desconectado: LOGOUT`).
+
+Estado actual (resuelto):
+
+- El bloqueo fue **temporal**: al reintentar el vínculo directo desde el pod, WhatsApp aceptó el QR y el bot quedó **conectado y estable en el cluster**.
+- **Fix de código**: se agregó `authTimeoutMs: 600000` al `Client` de whatsapp-web.js en `whatsapp/service.cjs`. Sin este fix, tras escanear el QR el pod crasheaba con `auth timeout` (el default de la librería es 30s y la carga desde la IP del cluster tarda más).
+- El deployment usa `imagePullPolicy: Always` para tomar siempre el último build desde Nexus.
+
+Nota para despliegues: si en el futuro WhatsApp vuelve a bloquear la IP, las opciones son esperar (es temporal), usar un egress con IP no-datacenter, o migrar a la WhatsApp Business API.
+
 ---
 
 ## Ejecución (Modo Tradicional)

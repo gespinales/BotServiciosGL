@@ -137,7 +137,7 @@ spec:
       containers:
         - name: bot-whatsapp
           image: srv-osnexus01.minfin.gob.gt:8006/botserviciosgl-wa:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: HOME
               value: "/tmp"

@@ -51,6 +51,7 @@ class WhatsAppService {
                 dataPath: './data/session',
                 clientId: 'botserviciosgl'
             }),
+            authTimeoutMs: 600000,
             puppeteer: {
                 headless: true,
                 args: [

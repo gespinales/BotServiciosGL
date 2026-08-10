@@ -27,7 +27,8 @@ spec:
       containers:
         - name: bot-whatsapp
           image: srv-osnexus01.minfin.gob.gt:8006/botserviciosgl-wa:latest
-          imagePullPolicy: IfNotPresent
+          # Always: asegura bajar el ultimo build (la sesion/whatsapp requiere el fix authTimeoutMs)
+          imagePullPolicy: Always
           env:
             - name: HOME
               value: "/tmp"
