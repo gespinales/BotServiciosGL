@@ -1,13 +1,31 @@
 # ============================================================
-# Despliegue completo BotServiciosGL en OKD/OpenShift
-# Aplicar:  oc apply -f ocp/botserviciosgl.yaml
-# Requisitos previos (ya creados manualmente):
-#   - Secret 'nexus-registry' (docker-registry con credenciales Nexus)
-#   - Secret 'oracle-credentials' (ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN)
+# MANIFIESTO FINAL / CANONICO - BotServiciosGL en OKD/OpenShift
+# Consolida: 00-configmap, 01/02-pvc, 03/04-ollama, 05-deployment-bot
 #
-# ⚠️ El pod del bot se conecta al AMBIENTE DE QA:
-#      Oracle QA -> 172.20.1.233:1521/PDBQA (IP interna; la NAT pública es 172.18.28.233)
-#      (pendiente que la red habilite la ruta desde la subred de pods)
+# Aplicar:   oc apply -f ocp/botserviciosgl.yaml
+#
+# Prerrequisitos manuales (NO van en este archivo por seguridad):
+#   1) oc login al cluster
+#   2) namespace:
+#        oc create namespace botserviciosgl-wa
+#   3) pull secret para Nexus:
+#        oc create secret docker-registry nexus-registry \
+#          --docker-server=srv-osnexus01.minfin.gob.gt:8006 \
+#          --docker-username=TU_USUARIO --docker-password=TU_PASS \
+#          -n botserviciosgl-wa
+#   4) credenciales Oracle del AMBIENTE DE QA (IP INTERNA):
+#        oc create secret generic oracle-credentials \
+#          --from-literal=ORACLE_USER=SERVICIOS \
+#          --from-literal=ORACLE_PASSWORD=XXXX \
+#          --from-literal=ORACLE_DSN=172.20.1.233:1521/PDBQA \
+#          -n botserviciosgl-wa
+#   5) SCC (la imagen corre como root para Chrome/Xvfb):
+#        oc adm policy add-scc-to-user anyuid -z default -n botserviciosgl-wa
+#
+# Red (prerrequisito de infraestructura):
+#   - Oracle QA por IP INTERNA 172.20.1.233:1521 (la NAT 172.18.28.233 NO es alcanzable
+#     desde la subred de pods; conexion verificada con SELECT SYSDATE)
+#   - Salida a WhatsApp desde el nodo worker
 # ============================================================
 
 ---
