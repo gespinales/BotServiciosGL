@@ -921,8 +921,8 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             // Preparar JSON body
             const body = JSON.stringify({
                 "ID_ENTIDAD": estado.entidadId,
-                "STR_USR": "sias",
-                "STRPWD": "Password.Secreto",
+                "STR_USR": "gespinales",
+                "STRPWD": "Miau124!",
                 "REPORTE": "GENERAR_DOCUMENTO_COBRO_CUENTA_CORRIENTE",
                 "ID_CONTRIBUYENTE_DOC": parseInt(idContribuyente),
                 "CUENTAS_CORRIENTES": idsCuentas.join(',')
@@ -1023,8 +1023,9 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
     
     descargarPdfPost(url, body) {
         console.log(`[descargarPdfPost] URL: ${url}, Body: ${body}`);
+        const transport = url.startsWith('https:') ? https : http;
         return new Promise((resolve, reject) => {
-            const req = http.request(url, {
+            const req = transport.request(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
