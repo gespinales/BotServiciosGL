@@ -14,6 +14,7 @@ class WhatsAppService {
         this.client = null;
         this.ready = false;
         this.userState = {};
+        this.sesionTimeouts = {};
     }
     
     enviarConCodigo(msg, texto) {
@@ -33,15 +34,44 @@ class WhatsAppService {
         
         if (diferencia >= this.TIMEOUT_MINUTOS) {
             console.log(`[${new Date().toLocaleTimeString()}] Session expired for ${from}`);
-            delete this.userState[from];
+            this.terminarSesion(from);
             return true;
         }
         return false;
+    }
+
+    programarExpiracion(from) {
+        if (this.sesionTimeouts[from]) {
+            clearTimeout(this.sesionTimeouts[from]);
+        }
+        this.sesionTimeouts[from] = setTimeout(async () => {
+            delete this.sesionTimeouts[from];
+            if (this.userState[from]) {
+                console.log(`[${new Date().toLocaleTimeString()}] Sesión expirada por inactividad (timer) para ${from}`);
+                this.terminarSesion(from);
+                if (this.client) {
+                    try {
+                        await this.client.sendMessage(from, 'Tu sesión ha expirado por inactividad y se ha cerrado.\n\nEnvía un mensaje cuando quieras consultar de nuevo y comenzaremos una nueva sesión. ¡Hasta luego!');
+                    } catch (error) {
+                        console.error('Error enviando despedida de sesión:', error);
+                    }
+                }
+            }
+        }, this.TIMEOUT_MINUTOS * 60 * 1000);
+    }
+
+    terminarSesion(from) {
+        if (this.sesionTimeouts[from]) {
+            clearTimeout(this.sesionTimeouts[from]);
+            delete this.sesionTimeouts[from];
+        }
+        delete this.userState[from];
     }
     
     actualizarActividad(from) {
         if (this.userState[from]) {
             this.userState[from].ultimaActividad = Date.now();
+            this.programarExpiracion(from);
         }
     }
 
@@ -127,6 +157,7 @@ class WhatsAppService {
         // Verificar timeout de sesión
         if (this.verificarTimeout(from)) {
             this.userState[from] = { primer_mensaje: true, ultimaActividad: Date.now() };
+            this.programarExpiracion(from);
             await this.enviarBienvenida(msg);
             this.enviarConCodigo(msg, 'Tu sesión ha expirado y se ha cerrado por inactividad.\n\nPero no te preocupes, podemos comenzar de nuevo! :)');
             return;
@@ -138,6 +169,7 @@ class WhatsAppService {
         // Si no hay estado, es el primer mensaje -> dar bienvenida
         if (!estado) {
             this.userState[from] = { primer_mensaje: true, ultimaActividad: Date.now() };
+            this.programarExpiracion(from);
             try {
                 await this.enviarBienvenida(msg);
             } catch (error) {
@@ -151,7 +183,7 @@ class WhatsAppService {
         
         // Si hay estado pero solo primer_mensaje, es el segundo mensaje -> departamentos
         if (estado.primer_mensaje) {
-            delete this.userState[from];
+            this.terminarSesion(from);
             try {
                 await this.enviarDepartamentos(msg);
             } catch (error) {
@@ -162,13 +194,13 @@ class WhatsAppService {
         }
 
         if (text === '0' || text === 'MENU' || text === 'INICIO') {
-            delete this.userState[from];
+            this.terminarSesion(from);
             await this.enviarDepartamentos(msg);
             return;
         }
 
         if (text === 'X' || text === 'SALIR' || text === 'SALIDA') {
-            delete this.userState[from];
+            this.terminarSesion(from);
             this.enviarConCodigo('Hasta luego!');
             return;
         }
@@ -178,7 +210,8 @@ class WhatsAppService {
             const deptos = await this.obtenerDepartamentos();
             
             if (isNaN(num) || num < 1 || num > deptos.length) {
-                this.enviarConCodigo('Número no válido. Selecciona el departamento:');
+                this.enviarConCodigo(msg, 'Número no válido. Has elegido una opción fuera del rango permitido.');
+                await this.enviarDepartamentos(msg);
                 return;
             }
             
@@ -187,6 +220,7 @@ class WhatsAppService {
                 departamento: num,
                 deptoNombre: depto.NOMBRE
             };
+            this.programarExpiracion(from);
             
             await this.enviarEntidades(msg, from);
             return;
@@ -196,7 +230,8 @@ class WhatsAppService {
             const num = parseInt(text);
             
             if (isNaN(num) || !estado.entidades || num < 1 || num > estado.entidades.length) {
-                this.enviarConCodigo('Número no válido. Selecciona la entidad:');
+                this.enviarConCodigo(msg, 'Número no válido. Has elegido una opción fuera del rango permitido.');
+                await this.enviarEntidades(msg, from);
                 return;
             }
             
@@ -216,8 +251,28 @@ class WhatsAppService {
                 'CATASTRO': { tipo: 'CATASTRO', prompt: 'Ingresa el NÚMERO DE CATASTRO:', placeholder: 'catastro' },
                 'CONTRIBUYENTE': { tipo: 'CONTRIBUYENTE', prompt: 'Ingresa el DPI del contribuyente:', placeholder: 'DPI' }
             };
-            
-            // Paso 3: Intentar Ollama primero (modo híbrido)
+
+            const tiposNumericos = {
+                '1': { tipo: 'TARJETA', prompt: 'Ingresa el NÚMERO DE TARJETA:', placeholder: 'tarjeta' },
+                '2': { tipo: 'CATASTRO', prompt: 'Ingresa el NÚMERO DE CATASTRO:', placeholder: 'catastro' },
+                '3': { tipo: 'CONTRIBUYENTE', prompt: 'Ingresa el DPI del contribuyente:', placeholder: 'DPI' }
+            };
+
+            // Selección numérica del menú: no pasar por la IA (evita clasificaciones erróneas)
+            if (/^\d$/.test(text)) {
+                if (tiposNumericos[text]) {
+                    this.userState[from].tipoBusqueda = tiposNumericos[text].tipo;
+                    this.userState[from].promptBusqueda = tiposNumericos[text].prompt;
+                    this.enviarConCodigo(msg, `Has elegido: Buscar por ${tiposNumericos[text].tipo}\n\n${tiposNumericos[text].prompt}\n(Escribe X para reiniciar)`);
+                    return;
+                }
+                // Número fuera del rango 1-3 (el 0 ya se maneja como reiniciar)
+                this.enviarConCodigo(msg, 'Opción no válida. Has elegido un número fuera del rango permitido (1, 2 o 3).');
+                await this.enviarTipoBusqueda(msg);
+                return;
+            }
+
+            // Paso 3: Intentar Ollama primero (modo híbrido) para texto libre
             const clasificacion = await this.clasificarBusqueda(msg.body);
             
             // clasificacion puede ser un array (múltiples consultas) o un objeto (una sola)
@@ -282,7 +337,7 @@ class WhatsAppService {
                             // Respuesta no es JSON válido
                         }
                         if (!tarjetas || tarjetas.length === 0) {
-                            this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
+                            this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.\n\nVerifica el número de tarjeta e intenta nuevamente.');
                             delete this.userState[from].identificador;
                             return;
                         }
@@ -296,15 +351,10 @@ class WhatsAppService {
                 return;
             }
             
-            // Fallback: menú numérico tradicional
-            const tiposNumericos = {
-                '1': { tipo: 'TARJETA', prompt: 'Ingresa el NÚMERO DE TARJETA:', placeholder: 'tarjeta' },
-                '2': { tipo: 'CATASTRO', prompt: 'Ingresa el NÚMERO DE CATASTRO:', placeholder: 'catastro' },
-                '3': { tipo: 'CONTRIBUYENTE', prompt: 'Ingresa el DPI del contribuyente:', placeholder: 'DPI' }
-            };
-            
+            // Fallback: menú numérico tradicional (texto no numérico sin clasificación IA válida)
             if (!tiposNumericos[text]) {
-                this.enviarConCodigo('Opción no válida. Selecciona el tipo de búsqueda:\n1️⃣ TARJETA\n2️⃣ CATASTRO\n3️⃣ CONTRIBUYENTE');
+                this.enviarConCodigo(msg, 'Opción no válida. Has elegido una opción fuera del rango permitido (1, 2 o 3).');
+                await this.enviarTipoBusqueda(msg);
                 return;
             }
             
@@ -330,15 +380,15 @@ class WhatsAppService {
                         id_entidad: this.userState[from].entidadId
                     });
                     console.log(`[TARJETA] Buscando tarjeta: ${this.userState[from].identificador}, Respuesta: ${respuesta}`);
-                    if (respuesta.startsWith('ERROR') || !respuesta.trim()) {
-                        this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
-                        delete this.userState[from].identificador;
-                        return;
-                    }
                     // Formato json devuelve array
-                    const tarjetas = JSON.parse(respuesta.trim());
+                    let tarjetas = [];
+                    try {
+                        tarjetas = JSON.parse(respuesta.trim());
+                    } catch (e) {
+                        tarjetas = [];
+                    }
                     if (!tarjetas || tarjetas.length === 0) {
-                        this.enviarConCodigo(msg, 'No se encontró la tarjeta. Verifica el número e intenta nuevamente.');
+                        this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.\n\nVerifica el número de tarjeta e intenta nuevamente.');
                         delete this.userState[from].identificador;
                         return;
                     }
@@ -365,7 +415,7 @@ class WhatsAppService {
                 const todasTarjetas = results.flat();
                 
                 if (!todasTarjetas || todasTarjetas.length === 0) {
-                    this.enviarConCodigo('No se encontraron tarjetas.');
+                    this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.');
                     return;
                 }
                 
@@ -396,7 +446,7 @@ class WhatsAppService {
             const tarjetas = await this.obtenerTarjetasCatastro(this.userState[from].catastroSeleccionado, estado.entidadId);
             
             if (!tarjetas || tarjetas.length === 0) {
-                this.enviarConCodigo(`No se encontraron tarjetas para el catastro: ${this.userState[from].catastroSeleccionado}`);
+                this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.\n\nVerifica el número de catastro e intenta nuevamente.');
                 return;
             }
             
@@ -453,11 +503,12 @@ class WhatsAppService {
                 await this.runDetalle(msg, from);
                 return;
             } else if (text === 'N' || text === 'X') {
-                delete this.userState[from];
+                this.terminarSesion(from);
                 this.enviarConCodigo('Gracias por usar el servicio. Hasta luego!');
                 return;
             } else {
-                this.enviarConCodigo('Opción no válida. Escribe S para ver detalle o N para salir.');
+                this.enviarConCodigo(msg, 'Opción no válida. Escribe S para ver detalle o N para salir.');
+                await this.preguntarDetalle(msg, from);
                 return;
             }
         }
@@ -481,7 +532,8 @@ class WhatsAppService {
                 return;
             }
             
-            this.enviarConCodigo('Opción no válida.\nEscribe 0 para reiniciar.');
+            this.enviarConCodigo(msg, 'Opción no válida. Has elegido una opción fuera del rango permitido (1 o 2).');
+            await this.enviarMenu(msg, from);
             return;
         }
 
@@ -504,6 +556,7 @@ class WhatsAppService {
                     queryResumen: estado.queryResumen,
                     tarjetasCatastro: estado.tarjetasCatastro
                 };
+                this.programarExpiracion(from);
                 await this.runDetalle(msg, from);
             } else {
                 const num = parseInt(text);
@@ -644,7 +697,7 @@ Escribe X para salir.`;
             
             if (!entidades || entidades.length === 0) {
                 this.enviarConCodigo('No hay entidades en este departamento.\n\nSelecciona otro departamento:');
-                delete this.userState[from];
+                this.terminarSesion(from);
                 await this.enviarDepartamentos(msg);
                 return;
             }
@@ -717,7 +770,7 @@ Escribe el numero (1, 2 o 3)`;
             const catastros = await this.obtenerCatastrosContribuyente(estado.identificador, estado.departamento);
             
             if (!catastros || catastros.length === 0) {
-                this.enviarConCodigo(msg, `No se encontraron catastros para el DPI: ${estado.identificador}. Verifica el número e intenta nuevamente.`);
+                this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.\n\nVerifica el número de DPI e intenta nuevamente.');
                 delete this.userState[from].identificador;
                 return;
             }
@@ -749,7 +802,7 @@ Escribe el numero (1, 2 o 3)`;
             const tarjetas = await this.obtenerTarjetasCatastro(estado.identificador, estado.entidadId);
             
             if (!tarjetas || tarjetas.length === 0) {
-                this.enviarConCodigo(`No se encontraron tarjetas para el catastro: ${estado.identificador}\n\nEscribe otro catastro o 0 para reiniciar.`);
+                this.enviarConCodigo(`No se ha encontrado información según los datos solicitados.\n\nVerifica el número de catastro e intenta nuevamente.`);
                 delete this.userState[from].identificador;
                 return;
             }
@@ -860,7 +913,11 @@ async generarDocumentoCobro(msg, from) {
                 });
                 console.log(`[DOCUMENTO_COBRO] Respuesta cuentas: ${respuesta.substring(0, 300)}`);
                 if (!respuesta.startsWith('ERROR') && respuesta.trim()) {
-                    cuentas = JSON.parse(respuesta.trim());
+                    try {
+                        cuentas = JSON.parse(respuesta.trim());
+                    } catch (e) {
+                        cuentas = [];
+                    }
                 }
             } else if (estado.tipoBusqueda === 'CATASTRO') {
                 const respuesta = await this.ejecutarPython('cuentas_corrientes_pendientes_catastro', {
@@ -868,7 +925,11 @@ async generarDocumentoCobro(msg, from) {
                     id_entidad: estado.entidadId
                 });
                 if (!respuesta.startsWith('ERROR') && respuesta.trim()) {
-                    cuentas = JSON.parse(respuesta.trim());
+                    try {
+                        cuentas = JSON.parse(respuesta.trim());
+                    } catch (e) {
+                        cuentas = [];
+                    }
                 }
             } else if (estado.tipoBusqueda === 'CONTRIBUYENTE') {
                 const respuesta = await this.ejecutarPython('cuentas_corrientes_pendientes_contribuyente', {
@@ -876,7 +937,11 @@ async generarDocumentoCobro(msg, from) {
                     id_entidad: estado.entidadId
                 });
                 if (!respuesta.startsWith('ERROR') && respuesta.trim()) {
-                    cuentas = JSON.parse(respuesta.trim());
+                    try {
+                        cuentas = JSON.parse(respuesta.trim());
+                    } catch (e) {
+                        cuentas = [];
+                    }
                 }
             }
             
@@ -884,7 +949,7 @@ async generarDocumentoCobro(msg, from) {
             
             if (!cuentas || cuentas.length === 0) {
                 await this.enviarConCodigo(msg, 'No hay cuentas pendientes para generar documento de cobro.');
-                delete this.userState[from];
+                this.terminarSesion(from);
                 return;
             }
             
@@ -893,7 +958,7 @@ async generarDocumentoCobro(msg, from) {
         } catch (error) {
             console.error('[DOCUMENTO_COBRO] Error:', error);
             this.enviarConCodigo('Error al procesar la consulta.');
-            delete this.userState[from];
+            this.terminarSesion(from);
         }
     }
 
@@ -908,7 +973,7 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             
             if (!idContribuyente) {
                 await this.enviarConCodigo(msg, 'No se pudo obtener el identificador del contribuyente.');
-                delete this.userState[from];
+                this.terminarSesion(from);
                 return;
             }
             
@@ -935,7 +1000,7 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             
             if (!pdfBuffer) {
                 await this.enviarConCodigo(msg, 'Error al generar el documento. Intenta nuevamente.');
-                delete this.userState[from];
+                this.terminarSesion(from);
                 return;
             }
             
@@ -947,7 +1012,7 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             } catch (e) {
                 console.log(`[procesarDocumentoCobro] Error parseando JSON: ${e}`);
                 await this.enviarConCodigo(msg, 'Error al procesar la respuesta del servidor.');
-                delete this.userState[from];
+                this.terminarSesion(from);
                 return;
             }
             
@@ -978,13 +1043,13 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
                 if (!pdfBytes || pdfBytes.length === 0) {
                     console.log(`[procesarDocumentoCobro] No hay Documento_Bytes. dataObj: ${JSON.stringify(dataObj)}`);
                     await this.enviarConCodigo(msg, 'Error: No se generó el documento.');
-                    delete this.userState[from];
+                    this.terminarSesion(from);
                     return;
                 }
             } catch (e) {
                 console.log(`[procesarDocumentoCobro] Error extrayendo PDF: ${e}`);
                 await this.enviarConCodigo(msg, 'Error al procesar el documento.');
-                delete this.userState[from];
+                this.terminarSesion(from);
                 return;
             }
             
@@ -1012,12 +1077,12 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             }
             
             await this.enviarConCodigo(msg, `Documento de cobro enviado!\n\nGracias por usar el servicio!`);
-            delete this.userState[from];
+            this.terminarSesion(from);
             
         } catch (error) {
             console.error('Error generando documento:', error);
             this.enviarConCodigo('Error al generar el documento de cobro. Intenta nuevamente.');
-            delete this.userState[from];
+            this.terminarSesion(from);
         }
     }
     
@@ -1194,6 +1259,8 @@ console.log(`[obtenerIdContribuyente] Query: ${queryId}, Params:`, params);
             
             if (respuesta.startsWith('ERROR')) {
                 await this.enviarConCodigo(msg, respuesta.replace('ERROR: ', ''));
+            } else if (respuesta.includes('No se encontraron')) {
+                this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.');
             } else {
                 this.enviarConCodigo(msg, header + respuesta);
             }
@@ -1202,7 +1269,7 @@ console.log(`[obtenerIdContribuyente] Query: ${queryId}, Params:`, params);
             this.enviarConCodigo('Error al procesar la consulta.');
         }
         
-        delete this.userState[from];
+        this.terminarSesion(from);
     }
 
     async runResumen(msg, from) {
@@ -1236,10 +1303,10 @@ console.log(`[obtenerIdContribuyente] Query: ${queryId}, Params:`, params);
             
             if (respuesta.startsWith('ERROR')) {
                 await this.enviarConCodigo(msg, respuesta.replace('ERROR: ', ''));
-                delete this.userState[from];
+                this.terminarSesion(from);
             } else if (respuesta.includes('No se encontraron')) {
-                this.enviarConCodigo(msg, header + respuesta);
-                delete this.userState[from];
+                this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.');
+                this.terminarSesion(from);
             } else {
                 // MOSTRAR el resumen (ya incluye "¿Deseas ver el detalle? (S/N)")
                 this.enviarConCodigo(msg, header + respuesta);
@@ -1251,7 +1318,7 @@ console.log(`[obtenerIdContribuyente] Query: ${queryId}, Params:`, params);
         } catch (error) {
             console.error('Error:', error);
             this.enviarConCodigo('Error al procesar la consulta.');
-            delete this.userState[from];
+            this.terminarSesion(from);
         }
     }
 
@@ -1307,6 +1374,8 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             
             if (respuesta.startsWith('ERROR')) {
                 await this.enviarConCodigo(msg, respuesta.replace('ERROR: ', ''));
+            } else if (respuesta.includes('No se encontraron')) {
+                this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.');
             } else {
                 this.enviarConCodigo(msg, header + respuesta);
             }
@@ -1315,7 +1384,7 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             this.enviarConCodigo('Error al procesar la consulta.');
         }
         
-        delete this.userState[from];
+        this.terminarSesion(from);
     }
 
     async runQuery(msg, from) {
@@ -1337,7 +1406,7 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             if (respuesta.startsWith('ERROR')) {
                 await this.enviarConCodigo(msg, respuesta.replace('ERROR: ', ''));
             } else if (respuesta.includes('No se encontraron')) {
-                this.enviarConCodigo(msg, header + respuesta);
+                this.enviarConCodigo(msg, 'No se ha encontrado información según los datos solicitados.');
             } else {
                 this.enviarConCodigo(msg, header + respuesta);
             }
@@ -1346,7 +1415,7 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             this.enviarConCodigo('Error al procesar la consulta.');
         }
         
-        delete this.userState[from];
+        this.terminarSesion(from);
     }
 
     getQueryParams(estado) {
