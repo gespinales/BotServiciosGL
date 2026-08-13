@@ -188,20 +188,21 @@ class WhatsAppService {
                 await this.enviarDepartamentos(msg);
             } catch (error) {
                 console.error('Error al enviar departamentos:', error);
-                this.enviarConCodigo('Lo siento, hubo un error al cargar los departamentos. Intenta nuevamente.');
+                this.enviarConCodigo(msg, 'Lo siento, hubo un error al cargar los departamentos. Intenta nuevamente.');
             }
             return;
         }
 
         if (text === '0' || text === 'MENU' || text === 'INICIO') {
-            this.terminarSesion(from);
+            this.userState[from] = { ultimaActividad: Date.now() };
+            this.programarExpiracion(from);
             await this.enviarDepartamentos(msg);
             return;
         }
 
         if (text === 'X' || text === 'SALIR' || text === 'SALIDA') {
             this.terminarSesion(from);
-            this.enviarConCodigo('Hasta luego!');
+            this.enviarConCodigo(msg, 'Hasta luego!');
             return;
         }
 
@@ -400,7 +401,7 @@ class WhatsAppService {
                     await this.enviarMenu(msg, from);
                 }
             } else {
-                this.enviarConCodigo(`${estado.promptBusqueda}\n(Debe tener al menos 3 caracteres)`);
+                this.enviarConCodigo(msg, `${estado.promptBusqueda}\n(Debe tener al menos 3 caracteres)`);
             }
             return;
         }
@@ -437,7 +438,7 @@ class WhatsAppService {
             
             const num = parseInt(text);
             if (isNaN(num) || !estado.catastros || num < 1 || num > estado.catastros.length) {
-                this.enviarConCodigo('Número no válido. Selecciona el catastro:');
+                this.enviarConCodigo(msg, 'Número no válido. Selecciona el catastro:');
                 return;
             }
             
@@ -475,7 +476,7 @@ class WhatsAppService {
             
             const num = parseInt(text);
             if (isNaN(num) || num < 1 || num > estado.tarjetasCatastro.length) {
-                this.enviarConCodigo('Número no válido. Selecciona la tarjeta:');
+                this.enviarConCodigo(msg, 'Número no válido. Selecciona la tarjeta:');
                 return;
             }
             
@@ -504,7 +505,7 @@ class WhatsAppService {
                 return;
             } else if (text === 'N' || text === 'X') {
                 this.terminarSesion(from);
-                this.enviarConCodigo('Gracias por usar el servicio. Hasta luego!');
+                this.enviarConCodigo(msg, 'Gracias por usar el servicio. Hasta luego!');
                 return;
             } else {
                 this.enviarConCodigo(msg, 'Opción no válida. Escribe S para ver detalle o N para salir.');
@@ -561,7 +562,7 @@ class WhatsAppService {
             } else {
                 const num = parseInt(text);
 if (isNaN(num) || !estado.tarjetasCatastro || num < 1 || num > estado.tarjetasCatastro.length) {
-                this.enviarConCodigo('Número no válido. Selecciona la tarjeta:');
+                this.enviarConCodigo(msg, 'Número no válido. Selecciona la tarjeta:');
                     return;
                 }
                 // Guardar la tarjeta seleccionada y cambiar el tipo para el detalle
@@ -577,7 +578,7 @@ if (isNaN(num) || !estado.tarjetasCatastro || num < 1 || num > estado.tarjetasCa
             return;
         }
 
-        this.enviarConCodigo('Opción no válida.\nEscribe 0 para reiniciar.');
+        this.enviarConCodigo(msg, 'Opción no válida.\nEscribe 0 para reiniciar.');
     }
 
 getOpcionesConsulta(tipo, catastro) {
@@ -627,7 +628,7 @@ async enviarDepartamentos(msg) {
             const deptos = await this.obtenerDepartamentos();
             
             if (!deptos || deptos.length === 0) {
-                this.enviarConCodigo('Error: No se pudieron cargar los departamentos. Intenta nuevamente.');
+                this.enviarConCodigo(msg, 'Error: No se pudieron cargar los departamentos. Intenta nuevamente.');
                 return;
             }
             
@@ -640,7 +641,7 @@ async enviarDepartamentos(msg) {
             await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
             console.error('Error en enviarDepartamentos:', error);
-            this.enviarConCodigo('Error al cargar departamentos. Por favor intenta nuevamente.');
+            this.enviarConCodigo(msg, 'Error al cargar departamentos. Por favor intenta nuevamente.');
         }
 }
 
@@ -678,8 +679,6 @@ Puedo ayudarte a realizar lo siguiente:
 - Consultar cuentas pendientes
 - Generar documento de cobro
 
-Para comenzar, escribe cualquier texto o numero para iniciar la consulta.
-
 Escribe 0 en cualquier momento para reiniciar.
 Escribe X para salir.`;
         
@@ -696,8 +695,9 @@ Escribe X para salir.`;
             const entidades = await this.obtenerEntidades(estado.departamento);
             
             if (!entidades || entidades.length === 0) {
-                this.enviarConCodigo('No hay entidades en este departamento.\n\nSelecciona otro departamento:');
-                this.terminarSesion(from);
+                this.enviarConCodigo(msg, 'No hay entidades en este departamento.\n\nSelecciona otro departamento:');
+                this.userState[from] = { ultimaActividad: Date.now() };
+                this.programarExpiracion(from);
                 await this.enviarDepartamentos(msg);
                 return;
             }
@@ -713,7 +713,7 @@ Escribe X para salir.`;
             await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
             console.error('Error:', error);
-            this.enviarConCodigo('Error al cargar entidades.');
+            this.enviarConCodigo(msg, 'Error al cargar entidades.');
         }
     }
 
@@ -791,7 +791,7 @@ Escribe el numero (1, 2 o 3)`;
             await this.enviarConCodigo(msg, mensaje);
         } catch (error) {
             console.error('Error:', error);
-            this.enviarConCodigo('Error al buscar contribuyente.');
+            this.enviarConCodigo(msg, 'Error al buscar contribuyente.');
         }
     }
 
@@ -802,7 +802,7 @@ Escribe el numero (1, 2 o 3)`;
             const tarjetas = await this.obtenerTarjetasCatastro(estado.identificador, estado.entidadId);
             
             if (!tarjetas || tarjetas.length === 0) {
-                this.enviarConCodigo(`No se ha encontrado información según los datos solicitados.\n\nVerifica el número de catastro e intenta nuevamente.`);
+                this.enviarConCodigo(msg, `No se ha encontrado información según los datos solicitados.\n\nVerifica el número de catastro e intenta nuevamente.`);
                 delete this.userState[from].identificador;
                 return;
             }
@@ -826,7 +826,7 @@ Escribe el numero (1, 2 o 3)`;
             this.userState[from].esperandoTarjeta = true;
         } catch (error) {
             console.error('Error:', error);
-            this.enviarConCodigo('Error al buscar tarjetas del catastro.');
+            this.enviarConCodigo(msg, 'Error al buscar tarjetas del catastro.');
         }
     }
 
@@ -957,7 +957,7 @@ async generarDocumentoCobro(msg, from) {
             await this.procesarDocumentoCobro(msg, from, cuentas.map(c => c.ID_CUENTA_CORRIENTE));
         } catch (error) {
             console.error('[DOCUMENTO_COBRO] Error:', error);
-            this.enviarConCodigo('Error al procesar la consulta.');
+            this.enviarConCodigo(msg, 'Error al procesar la consulta.');
             this.terminarSesion(from);
         }
     }
@@ -1081,7 +1081,7 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             
         } catch (error) {
             console.error('Error generando documento:', error);
-            this.enviarConCodigo('Error al generar el documento de cobro. Intenta nuevamente.');
+            this.enviarConCodigo(msg, 'Error al generar el documento de cobro. Intenta nuevamente.');
             this.terminarSesion(from);
         }
     }
@@ -1266,7 +1266,7 @@ console.log(`[obtenerIdContribuyente] Query: ${queryId}, Params:`, params);
             }
         } catch (error) {
             console.error('Error:', error);
-            this.enviarConCodigo('Error al procesar la consulta.');
+            this.enviarConCodigo(msg, 'Error al procesar la consulta.');
         }
         
         this.terminarSesion(from);
@@ -1317,7 +1317,7 @@ console.log(`[obtenerIdContribuyente] Query: ${queryId}, Params:`, params);
             }
         } catch (error) {
             console.error('Error:', error);
-            this.enviarConCodigo('Error al procesar la consulta.');
+            this.enviarConCodigo(msg, 'Error al procesar la consulta.');
             this.terminarSesion(from);
         }
     }
@@ -1381,7 +1381,7 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             }
         } catch (error) {
             console.error('Error:', error);
-            this.enviarConCodigo('Error al procesar la consulta.');
+            this.enviarConCodigo(msg, 'Error al procesar la consulta.');
         }
         
         this.terminarSesion(from);
@@ -1412,7 +1412,7 @@ if (estado.tipoBusqueda === 'CATASTRO') {
             }
         } catch (error) {
             console.error('Error:', error);
-            this.enviarConCodigo('Error al procesar la consulta.');
+            this.enviarConCodigo(msg, 'Error al procesar la consulta.');
         }
         
         this.terminarSesion(from);
