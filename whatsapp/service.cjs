@@ -7,6 +7,50 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 
+const wsMod = require('ws');
+
+async function evalRenderer(sessionDir) {
+    const portFile = path.join(sessionDir, 'DevToolsActivePort');
+    if (!fs.existsSync(portFile)) return null;
+    const port = fs.readFileSync(portFile, 'utf8').split('\n')[0].trim();
+    if (!port) return null;
+    const targets = await new Promise((resolve) => {
+        const req = http.get({ host: '127.0.0.1', port, path: '/json/list', timeout: 3000 }, (res) => {
+            let d = '';
+            res.on('data', (c) => (d += c));
+            res.on('end', () => { try { resolve(JSON.parse(d)); } catch (e) { resolve([]); } });
+        });
+        req.on('error', () => resolve([]));
+        req.on('timeout', () => { req.destroy(); resolve([]); });
+    });
+    const page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
+    if (!page) return null;
+    return new Promise((resolve) => {
+        let done = false;
+        const finish = (v) => { if (!done) { done = true; try { ws.close(); } catch (e) {} clearTimeout(timer); resolve(v); } };
+        const timer = setTimeout(() => finish(null), 30000);
+        let ws;
+        try { ws = new wsMod(page.webSocketDebuggerUrl); } catch (e) { return finish(null); }
+        ws.on('error', () => finish(null));
+        ws.on('open', () => {
+            ws.send(JSON.stringify({
+                id: 1,
+                method: 'Runtime.evaluate',
+                params: { expression: '1+1', returnByValue: true }
+            }));
+            ws.on('message', (d) => {
+                try {
+                    const m = JSON.parse(d.data || d);
+                    if (m.id === 1) {
+                        const v = m.result && m.result.result ? m.result.result.value : null;
+                        finish(v === 2 ? 'alive' : null);
+                    }
+                } catch (e) { finish(null); }
+            });
+        });
+    });
+}
+
 class WhatsAppService {
     TIMEOUT_MINUTOS = 5;
     
@@ -84,16 +128,13 @@ class WhatsAppService {
             authTimeoutMs: 600000,
             puppeteer: {
                 headless: true,
+                dumpio: true,
+                protocolTimeout: 600000,
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process'
+                    '--disable-gpu'
                 ]
             },
             webVersionCache: {
@@ -112,9 +153,13 @@ class WhatsAppService {
             console.log('========================================\n');
             
             const qrPath = path.join(__dirname, '..', 'data', 'qr.png');
-            await QRCode.toFile(qrPath, qr, { width: 400 });
-            console.log(`QR guardado en: ${qrPath}`);
-            console.log('Abre el archivo para escanearlo\n');
+            try {
+                await QRCode.toFile(qrPath, qr, { width: 400 });
+                console.log(`QR guardado en: ${qrPath}`);
+                console.log('Abre el archivo para escanearlo\n');
+            } catch (e) {
+                console.error('Error guardando el QR (no critico):', e.message);
+            }
         });
 
         this.client.on('loading_screen', (percent, message) => {
@@ -135,15 +180,63 @@ class WhatsAppService {
         });
 
         this.client.on('message', async (msg) => {
-            await this.handleMessage(msg);
+            console.log(`EVENTO message recibido de ${msg.from}: "${String(msg.body).slice(0,60)}"`);
+            try {
+                await this.handleMessage(msg);
+            } catch (e) {
+                console.error('Error procesando mensaje:', e.message);
+            }
+        });
+
+        this.client.on('message_create', (msg) => {
+            console.log(`EVENTO message_create fromMe=${msg.fromMe} de ${msg.from}: "${String(msg.body).slice(0,60)}"`);
+        });
+
+        this.client.on('message_ack', (msg, ack) => {
+            console.log(`EVENTO message_ack tipo=${ack}`);
         });
 
         this.client.on('disconnected', (reason) => {
             console.log('WhatsApp desconectado:', reason);
             this.ready = false;
+            setTimeout(() => this.reconnect(), 10000);
         });
 
         await this.client.initialize();
+
+        this.client.on('ready', () => console.log('WhatsApp conectado y listo!'));
+
+        try {
+            const pg = this.client.pupPage;
+            if (pg) {
+                pg.on('console', (m) => console.log(`PAGE-CONSOLE[${m.type()}]: ${String(m.text()).slice(0,200)}`));
+                pg.on('pageerror', (e) => console.log(`PAGE-ERROR: ${String(e.message).slice(0,300)}`));
+                pg.on('requestfailed', (r) => console.log(`PAGE-REQFAIL: ${r.url().slice(0,100)} ${r.failure ? r.failure().errorText : ''}`));
+                pg.on('framenavigated', (f) => console.log(`PAGE-FRAME: ${f.url ? f.url().slice(0,100) : ''}`));
+            }
+        } catch (e) {
+            console.error('pagina no disponible para instrumentar:', e.message);
+        }
+
+        // WATCHDOG DESACTIVADO (diagnostico): el evaluate periodico podria estar
+        // provocando/acumulando llamadas CDP colgadas. NO reinicia el proceso.
+        this.watchdog = null;
+        console.log('WATCHDOG: desactivado (modo diagnostico)');
+    }
+
+    async reconnect() {
+        console.log('Reconectando WhatsApp...');
+        try {
+            await this.client.destroy();
+        } catch (e) {
+            console.error('Error en destroy durante reconexion:', e.message);
+        }
+        try {
+            await this.connect();
+        } catch (e) {
+            console.error('Error en reconexion:', e.message);
+            setTimeout(() => this.reconnect(), 30000);
+        }
     }
 
     async handleMessage(msg) {
@@ -1661,6 +1754,7 @@ except Exception as e:
     }
 
     async disconnect() {
+        if (this.watchdog) { clearInterval(this.watchdog); this.watchdog = null; }
         if (this.client) {
             await this.client.destroy();
         }

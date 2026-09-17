@@ -1,79 +1,57 @@
-FROM python:3.10-bullseye
+# ============================================================
+# Construida SOBRE la imagen ya desplegada (36d en produccion),
+# que ya contiene: Python 3.10 + flask/oracledb, Chrome, Oracle
+# InstantClient, node_modules. No se ejecuta pip ni apt-get.
+# Solo se reemplaza el runtime de Node 18 -> 24 y los fuentes.
+# ============================================================
+FROM base-botserviciosgl-wa:1
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/Guatemala
 
-RUN apt-get update && apt-get install -y \
-    wget \
-    curl \
-    gnupg \
-    ca-certificates \
-    build-essential \
-    unzip \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libxshmfence1 \
-    fonts-liberation \
-    xdg-utils \
-    libnss3 \
-    libnspr4 \
-    xvfb \
-    && rm -rf /var/lib/apt/lists/*
+# Instalar Node 24 LTS desde tarball oficial de nodejs.org (evita apt/nodesource)
+RUN wget -q https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz -O /tmp/node24.tar.xz \
+    && mkdir -p /opt/node24 \
+    && tar -xJf /tmp/node24.tar.xz -C /opt/node24 --strip-components=1 \
+    && rm /tmp/node24.tar.xz \
+    && ln -sfn /opt/node24/bin/node /usr/local/bin/node \
+    && ln -sfn /opt/node24/bin/npm /usr/local/bin/npm \
+    && ln -sfn /opt/node24/bin/npx /usr/local/bin/npx \
+    && node --version
 
-RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && apt-get update \
-    && apt-get install -y ./google-chrome-stable_current_amd64.deb \
-    && rm google-chrome-stable_current_amd64.deb \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN mkdir -p /opt/oracle \
-    && wget https://download.oracle.com/otn_software/linux/instantclient/2112000/instantclient-basic-linux.x64-21.12.0.0.0dbru.zip -O /tmp/instantclient.zip \
-    && unzip /tmp/instantclient.zip -d /opt/oracle \
-    && rm /tmp/instantclient.zip \
-    && echo "/opt/oracle/instantclient_21_12" > /etc/ld.so.conf.d/oracle-instantclient.conf \
-    && ldconfig
-
-ENV LD_LIBRARY_PATH=/opt/oracle/instantclient_21_12
-ENV ORACLE_HOME=/opt/oracle/instantclient_21_12
+ENV PATH=/opt/node24/bin:$PATH
+ENV NODE_PATH=/usr/local/lib/node_modules
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Alinear Puppeteer con la version que exige whatsapp-web.js (24.38.0) e instalar
+# su Chrome embebido. El sistema trae Chrome 147 manejado por puppeteer 22.15.0:
+# ese desajuste de protocolo CDP colgaba el renderer.
+# IMPORTANTE: esta capa va ANTES de copiar los fuentes para que un cambio de
+# codigo no obligue a re-descargar Chrome.
+ENV PUPPETEER_CACHE_DIR=/app/.puppeteer
+RUN cd /app \
+    && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD= PUPPETEER_SKIP_DOWNLOAD= npm install puppeteer@24.38.0 puppeteer-core@24.38.0 --no-save --no-audit --no-fund \
+    && npx puppeteer browsers install chrome \
+    && node -e "console.log('puppeteer:', require('/app/node_modules/puppeteer/package.json').version, 'core:', require('/app/node_modules/puppeteer-core/package.json').version)" \
+    && ls -d /app/.puppeteer/chrome/*
 
-COPY package*.json ./
-RUN npm install
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+# Usar el Chrome embebido de Puppeteer (compatible con su CDP), no el del sistema
+ENV PUPPETEER_EXECUTABLE_PATH=""
 
-COPY . .
-
+# Fuentes del servicio (cambian seguido; van al final para aprovechar la cache)
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-RUN mkdir -p /app/data/session /app/data/documentos
-
-# Copy the correct WhatsApp service files
 COPY whatsapp/service.cjs /app/whatsapp/service.cjs
 COPY whatsapp/bot.cjs /app/whatsapp/bot.cjs
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+RUN mkdir -p /app/data/session /app/data/documentos /app/data/.wwebjs_cache
 
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 EXPOSE 3000
 
-CMD ["node", "whatsapp/bot.js"]
+# bot.cjs (no bot.js): reintenta en vez de process.exit(1) ante fallos de arranque
+CMD ["node", "whatsapp/bot.cjs"]
