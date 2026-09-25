@@ -178,6 +178,32 @@ class WhatsAppService {
         }
     }
 
+    // Los errores que cruzan desde la pagina llegan envueltos por WhatsApp Web
+    // (objetos cuya clase esta minificada), por lo que String(e) no aporta nada
+    // util. Este helper descompone lo que si se puede leer.
+    describirError(e) {
+        if (!e) return 'error desconocido';
+        const partes = [];
+        partes.push(`tipo=${Object.prototype.toString.call(e)}`);
+        partes.push(`name=${e.name}`);
+        partes.push(`message=${e.message}`);
+        partes.push(`toString=${String(e)}`);
+        if (e.stack) partes.push(`stack=${String(e.stack).split('\n').slice(0, 6).join(' <- ')}`);
+        try {
+            const claves = Object.getOwnPropertyNames(e);
+            partes.push(`props=[${claves.join(',')}]`);
+            for (const k of claves) {
+                if (k === 'stack' || k === 'message') continue;
+                const v = e[k];
+                if (v === null || v === undefined || typeof v === 'function') continue;
+                partes.push(`${k}=${typeof v === 'object' ? JSON.stringify(v).slice(0, 200) : String(v)}`);
+            }
+        } catch (x) { /* objeto no inspeccionable */ }
+        const causa = e.cause || e.originalError || e.original || e.error;
+        if (causa) partes.push(`causa=${this.describirError(causa)}`);
+        return partes.join(' | ');
+    }
+
     async connect() {
         this.client = new Client({
             authStrategy: new LocalAuth({
@@ -1216,26 +1242,42 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             // Asegurar el shim de compatibilidad (por si la pagina se recargo)
             await this.aplicarCompatMedia();
             
-            // Enviar el PDF por WhatsApp usando msg.reply.
+            // Enviar el PDF por WhatsApp.
             // Se construye el MessageMedia en memoria (sin archivo temporal): asi no
             // dependemos de disco y se evita el fallback anterior ("descargalo aqui"),
             // que apuntaba a una ruta interna inexistente para el usuario.
+            const nombreArchivo = `documento_cobro_${idContribuyente}.pdf`;
+            const media = new MessageMedia(
+                'application/pdf',
+                pdfBytes.toString('base64'),
+                nombreArchivo,
+                pdfBytes.length
+            );
+            console.log(`[procesarDocumentoCobro] Media mime: ${media.mimetype}, size: ${media.data.length}`);
+
             let enviado = false;
+
+            // 1) Con cita al mensaje del usuario (mantiene el contexto del chat)
             try {
-                const nombreArchivo = `documento_cobro_${idContribuyente}.pdf`;
-                const media = new MessageMedia(
-                    'application/pdf',
-                    pdfBytes.toString('base64'),
-                    nombreArchivo,
-                    pdfBytes.length
-                );
-                console.log(`[procesarDocumentoCobro] Media mime: ${media.mimetype}, size: ${media.data.length}`);
-                // Usar msg.reply para mantener el contexto del chat
                 await msg.reply(media, { sendMediaAsDocument: true });
                 enviado = true;
-                console.log(`[procesarDocumentoCobro] PDF enviado exitosamente`);
+                console.log(`[procesarDocumentoCobro] PDF enviado exitosamente (con cita)`);
             } catch (e) {
-                console.log(`[procesarDocumentoCobro] Error sending media: ${e}, stack: ${e.stack}`);
+                console.log(`[procesarDocumentoCobro] Error enviando PDF con cita: ${this.describirError(e)}`);
+            }
+
+            // 2) Sin cita: la ruta de cita falla con el build actual de WhatsApp Web
+            if (!enviado) {
+                try {
+                    await this.client.sendMessage(msg.from, media, { sendMediaAsDocument: true });
+                    enviado = true;
+                    console.log(`[procesarDocumentoCobro] PDF enviado exitosamente (sin cita)`);
+                } catch (e2) {
+                    console.log(`[procesarDocumentoCobro] Error enviando PDF sin cita: ${this.describirError(e2)}`);
+                }
+            }
+
+            if (!enviado) {
                 await this.enviarConCodigo(msg, 'No se pudo enviar el PDF. Por favor intenta nuevamente.');
             }
             
