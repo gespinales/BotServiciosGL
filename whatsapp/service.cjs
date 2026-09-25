@@ -236,6 +236,9 @@ class WhatsAppService {
         this.client.on('ready', () => {
             console.log('WhatsApp conectado y listo!');
             this.ready = true;
+            // WWebJS ya esta inyectado en este punto: es el momento de instalar
+            // el shim de compatibilidad de media (antes no existe todavia).
+            this.aplicarCompatMedia().catch(() => {});
         });
 
         this.client.on('message', async (msg) => {
