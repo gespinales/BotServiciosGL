@@ -119,6 +119,65 @@ class WhatsAppService {
         }
     }
 
+    // COMPATIBILIDAD whatsapp-web.js 1.34.7 + WhatsApp Web 2.3000.1047819263
+    //
+    // Al enviar media, wwebjs construye el payload del mensaje haciendo spread de
+    // las propiedades del modelo MediaData que devuelve processMediaData(). El build
+    // actual de WhatsApp Web renombra sus props internas a "__x_*" (por ejemplo
+    // "__x_id"), y al hacer el spread "__x_id" pisa la prop "id" del Msg, quedando
+    // esta en undefined. Durante Msg.initialize() se invoca getValidatedSender() ->
+    // getSender(), cuyo getter memoizado exige un "id" y lanza:
+    //   "Data passed to getter must include an id property (it's how we memoize) but got undefined"
+    // Esto solo afecta a los mensajes con media; los de texto funcionan normal.
+    //
+    // Solucion: marcar como no-enumerables las props internas "__x_*" del modelo de
+    // media, de modo que el spread las ignore sin alterar su valor.
+    async aplicarCompatMedia() {
+        try {
+            const pg = this.client && this.client.pupPage;
+            if (!pg) return false;
+
+            const aplicado = await pg.evaluate(() => {
+                if (!window.WWebJS || typeof window.WWebJS.processMediaData !== 'function') {
+                    return false;
+                }
+                if (window.__compatMediaShim) return true;
+
+                const original = window.WWebJS.processMediaData.bind(window.WWebJS);
+                window.WWebJS.processMediaData = async function (...args) {
+                    const resultado = await original(...args);
+                    if (resultado && typeof resultado === 'object') {
+                        for (const clave of Object.keys(resultado)) {
+                            if (clave.indexOf('__x_') === 0) {
+                                try {
+                                    Object.defineProperty(resultado, clave, {
+                                        value: resultado[clave],
+                                        enumerable: false,
+                                        writable: true,
+                                        configurable: true
+                                    });
+                                } catch (e) { /* prop no configurable: se ignora */ }
+                            }
+                        }
+                    }
+                    return resultado;
+                };
+                window.__compatMediaShim = true;
+                return true;
+            });
+
+            if (aplicado) {
+                console.log('COMPAT-MEDIA: shim de props __x_* aplicado (envio de PDF habilitado)');
+            } else {
+                console.warn('COMPAT-MEDIA: WWebJS.processMediaData aun no disponible, se reintentara');
+            }
+            return aplicado;
+        } catch (e) {
+            console.error('COMPAT-MEDIA: error aplicando shim:', e.message);
+            return false;
+        }
+    }
+
     async connect() {
         this.client = new Client({
             authStrategy: new LocalAuth({
@@ -203,6 +262,9 @@ class WhatsAppService {
         });
 
         await this.client.initialize();
+
+        // Habilitar envio de media (PDF) en el build actual de WhatsApp Web
+        await this.aplicarCompatMedia();
 
         this.client.on('ready', () => console.log('WhatsApp conectado y listo!'));
 
@@ -1148,25 +1210,35 @@ async procesarDocumentoCobro(msg, from, idsCuentas) {
             
             console.log(`[procesarDocumentoCobro] PDF bytes: ${pdfBytes.length}`);
             
-            // Enviar el PDF por WhatsApp usando msg.reply
-            const tempPath = path.join(__dirname, '..', 'data', `temp_${Date.now()}.pdf`);
-            const dataDir = path.join(__dirname, '..', 'data');
-            if (!fs.existsSync(dataDir)) {
-                fs.mkdirSync(dataDir, { recursive: true });
-            }
-            fs.writeFileSync(tempPath, pdfBytes);
+            // Asegurar el shim de compatibilidad (por si la pagina se recargo)
+            await this.aplicarCompatMedia();
             
+            // Enviar el PDF por WhatsApp usando msg.reply.
+            // Se construye el MessageMedia en memoria (sin archivo temporal): asi no
+            // dependemos de disco y se evita el fallback anterior ("descargalo aqui"),
+            // que apuntaba a una ruta interna inexistente para el usuario.
+            let enviado = false;
             try {
-                const media = MessageMedia.fromFilePath(tempPath);
+                const nombreArchivo = `documento_cobro_${idContribuyente}.pdf`;
+                const media = new MessageMedia(
+                    'application/pdf',
+                    pdfBytes.toString('base64'),
+                    nombreArchivo,
+                    pdfBytes.length
+                );
                 console.log(`[procesarDocumentoCobro] Media mime: ${media.mimetype}, size: ${media.data.length}`);
                 // Usar msg.reply para mantener el contexto del chat
-                await msg.reply(media);
+                await msg.reply(media, { sendMediaAsDocument: true });
+                enviado = true;
                 console.log(`[procesarDocumentoCobro] PDF enviado exitosamente`);
             } catch (e) {
                 console.log(`[procesarDocumentoCobro] Error sending media: ${e}, stack: ${e.stack}`);
-                await this.enviarConCodigo(msg, `Error al enviar PDF. Descárgalo aquí: ${tempPath}`);
-            } finally {
-                try { fs.unlinkSync(tempPath); } catch (e) {}
+                await this.enviarConCodigo(msg, 'No se pudo enviar el PDF. Por favor intenta nuevamente.');
+            }
+            
+            if (!enviado) {
+                this.terminarSesion(from);
+                return;
             }
             
             await this.enviarConCodigo(msg, `Documento de cobro enviado!\n\nGracias por usar el servicio!`);
